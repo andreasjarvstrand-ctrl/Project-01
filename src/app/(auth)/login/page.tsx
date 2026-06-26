@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [devCode, setDevCode] = useState("")
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -30,6 +31,7 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Failed to send code")
+      if (data.devCode) setDevCode(data.devCode)
       setStep("otp")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
@@ -92,6 +94,7 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-sm">
+      {/* Logo */}
       <div className="flex items-center justify-center gap-2 mb-8">
         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600">
           <FolderKanban className="w-5 h-5 text-white" />
@@ -143,6 +146,13 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {devCode && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center">
+                <p className="text-xs font-medium text-amber-700 mb-1">Dev mode — no SMTP configured</p>
+                <p className="text-2xl font-bold tracking-widest text-amber-900">{devCode}</p>
+              </div>
+            )}
+
             <div>
               <Label className="mb-3 block text-center">Enter verification code</Label>
               <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
@@ -171,7 +181,7 @@ export default function LoginPage() {
 
             <button
               type="button"
-              onClick={() => { setStep("email"); setOtp(["", "", "", "", "", ""]); setError("") }}
+              onClick={() => { setStep("email"); setOtp(["", "", "", "", "", ""]); setError(""); setDevCode("") }}
               className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mx-auto"
             >
               <RotateCcw className="w-3 h-3" /> Try a different email

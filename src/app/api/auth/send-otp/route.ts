@@ -19,9 +19,13 @@ export async function POST(req: Request) {
     }
 
     const code = await createOtpRecord(email)
-    await sendOtpEmail(email, code)
+    const emailSent = await sendOtpEmail(email, code)
 
-    return NextResponse.json({ message: "Verification code sent" })
+    const isDev = process.env.NODE_ENV === "development"
+    return NextResponse.json({
+      message: "Verification code sent",
+      ...(isDev && !emailSent ? { devCode: code } : {}),
+    })
   } catch (e) {
     if (e instanceof ZodError) {
       return NextResponse.json({ error: e.issues[0]?.message ?? "Invalid input" }, { status: 400 })

@@ -15,7 +15,8 @@ async function getTransporter() {
   })
 }
 
-export async function sendOtpEmail(email: string, code: string): Promise<void> {
+/** Returns true if email was sent via SMTP, false if falling back to console/dev mode. */
+export async function sendOtpEmail(email: string, code: string): Promise<boolean> {
   const transporter = await getTransporter()
 
   if (!transporter) {
@@ -23,7 +24,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     console.log(`OTP for ${email}: ${code}`)
     console.log(`(Configure SMTP env vars to send real emails)`)
     console.log(`========================================\n`)
-    return
+    return false
   }
 
   const from = process.env.SMTP_FROM ?? "noreply@productive-clone.com"
@@ -44,4 +45,6 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
       </div>
     `,
   })
+
+  return true
 }
