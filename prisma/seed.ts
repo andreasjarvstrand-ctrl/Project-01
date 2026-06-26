@@ -15,10 +15,22 @@ async function main() {
     create: { name: "Admin User", email: "admin@example.com", role: "ADMIN" },
   })
 
-  const member = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: "member@example.com" },
     update: {},
     create: { name: "Jane Doe", email: "member@example.com", role: "MEMBER" },
+  })
+
+  await prisma.user.upsert({
+    where: { email: "andreas.jarvstrand@gmail.com" },
+    update: { role: "ADMIN" },
+    create: { name: "Andreas Järvstrand", email: "andreas.jarvstrand@gmail.com", role: "ADMIN" },
+  })
+
+  await prisma.user.upsert({
+    where: { email: "cek0810@hotmail.com" },
+    update: { role: "ADMIN" },
+    create: { name: "CEK", email: "cek0810@hotmail.com", role: "ADMIN" },
   })
 
   const project = await prisma.project.upsert({
@@ -32,6 +44,8 @@ async function main() {
       createdById: admin.id,
     },
   })
+
+  const member = await prisma.user.findUniqueOrThrow({ where: { email: "member@example.com" } })
 
   await prisma.projectMember.upsert({
     where: { projectId_userId: { projectId: project.id, userId: admin.id } },
@@ -88,9 +102,9 @@ async function main() {
   }
 
   console.log("\nSeed completed!")
-  console.log("  Admin: admin@example.com")
+  console.log("  Admins: admin@example.com, andreas.jarvstrand@gmail.com, cek0810@hotmail.com")
   console.log("  Member: member@example.com")
-  console.log("  Use the OTP login — the code will appear in the terminal.\n")
+  console.log("  Use OTP login — the code will appear in the terminal.\n")
 }
 
 main()
