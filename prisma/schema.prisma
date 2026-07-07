@@ -1,0 +1,466 @@
+// Productive — procurement-flavored project management.
+// Data model follows docs/feature-map-v1-redline.md §F.
+//
+// Conventions:
+// - SQLite has no enum support in Prisma, so enum-like fields are String,
+//   validated in src/lib/domain.ts.
+// - Every workspace-owned table carries workspaceId (redline Q6: single
+//   workspace today, multi-workspace additive later).
+// - IDs are cuids so a future offline client can generate them locally
+//   (redline D7).
+// - Money is stored as whole currency units (Int) + ISO 4217 code
+//   (redline Q8: multi-currency minimal, no FX engine).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------- identity & access ----------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  memberships     Membership[]
+  sessions        Session[]
+  createdProjects Project[]        @relation("ProjectCreator")
+  assignedTasks   Task[]           @relation("TaskAssignee")
+  ownedSuppliers  Supplier[]       @relation("SupplierOwner")
+  raidEntries     RaidEntry[]      @relation("RaidOwner")
+  stakeholders    Stakeholder[]
+  gateApprovals   GateApproval[]
+  roundEvaluators RoundEvaluator[]
+  scores          Score[]
+  comments        Comment[]
+  activity        ActivityLog[]
+}
+
+model OtpCode {
+  id        String    @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Workspace {
+  id                       String   @id @default(cuid())
+  name                     String
+  currency                 String   @default("EUR")
+  // Redline Q2: viewers can comment, workspace toggle.
+  viewersCanComment        Boolean  @default(true)
+  // Redline Q3: members create projects, workspace toggle.
+  membersCanCreateProjects Boolean  @default(true)
+  createdAt                DateTime @default(now())
+
+  memberships        Membership[]
+  categories         Category[]
+  suppliers          Supplier[]
+  projects           Project[]
+  contracts          Contract[]
+  scorecardTemplates ScorecardTemplate[]
+  comments           Comment[]
+  activity           ActivityLog[]
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String // ADMIN | MEMBER | VIEWER
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+}
+
+// ---------- categories & suppliers ----------
+
+// Redline A2: category is an attribute entity, not a folder.
+model Category {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  color       String    @default("#6366f1")
+
+  projects  Project[]
+  suppliers SupplierCategory[]
+
+  @@unique([workspaceId, name])
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  tier        String    @default("TRANSACTIONAL") // STRATEGIC | PREFERRED | TRANSACTIONAL
+  status      String    @default("PROSPECTIVE") // PROSPECTIVE | ACTIVE | UNDER_REVIEW | DO_NOT_USE
+  riskFlagged Boolean   @default(false)
+  riskNote    String?
+  ownerId     String?
+  owner       User?     @relation("SupplierOwner", fields: [ownerId], references: [id])
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categories     SupplierCategory[]
+  contacts       SupplierContact[]
+  projects       ProjectSupplier[]
+  contracts      Contract[]
+  roundSuppliers RoundSupplier[]
+  scores         Score[]
+}
+
+model SupplierCategory {
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([supplierId, categoryId])
+}
+
+// Redline Q1: contacts modeled now so an external portal can attach later.
+model SupplierContact {
+  id         String   @id @default(cuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  name       String
+  email      String?
+  phone      String?
+  role       String?
+}
+
+// ---------- projects & stage-gates ----------
+
+model Project {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  type         String // SOURCING | CONTRACT_RENEWAL | SUPPLIER_ONBOARDING | CATEGORY_REVIEW | PERFORMANCE_REVIEW | RISK_ASSESSMENT
+  sourcingType String? // RFI | RFQ | RFP | RFT | RFS
+  kraljic      String? // STRATEGIC | LEVERAGE | BOTTLENECK | NON_CRITICAL
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id])
+  status       String    @default("ACTIVE") // ACTIVE | CLOSED | ARCHIVED
+  rag          String    @default("GREEN") // GREEN | AMBER | RED
+
+  // Money: whole units + ISO code (redline Q8, A3 — simple savings fields).
+  currency        String  @default("EUR")
+  estimatedSpend  Int?
+  savingsTarget   Int?
+  savingsRealized Int?
+  savingsType     String? // REDUCTION | AVOIDANCE | INCENTIVE
+  baselineNote    String?
+
+  createdById String
+  createdBy   User      @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  closedAt    DateTime?
+
+  stages        Stage[]
+  tasks         Task[]
+  raidEntries   RaidEntry[]
+  stakeholders  Stakeholder[]
+  suppliers     ProjectSupplier[]
+  scoringRounds ScoringRound[]
+  contracts     Contract[]
+}
+
+model ProjectSupplier {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  note       String?
+
+  @@unique([projectId, supplierId])
+}
+
+// Redline A1: custom stage names map to a fixed canonical phase so the
+// portfolio pipeline board is a view over the same data, never a second
+// status field. §4: entered/exited timestamps feed cycle-time reporting.
+model Stage {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  canonicalPhase String // INITIATE | RESEARCH | SOURCING | EVALUATION | AWARD | CLOSEOUT
+  order          Int
+  gateRequired   Boolean   @default(false)
+  enteredAt      DateTime?
+  exitedAt       DateTime?
+
+  approvals GateApproval[]
+  tasks     Task[]
+
+  @@unique([projectId, order])
+}
+
+// Redline A5: approvers are named per gate, independent of workspace role.
+model GateApproval {
+  id         String    @id @default(cuid())
+  stageId    String
+  stage      Stage     @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  approverId String
+  approver   User      @relation(fields: [approverId], references: [id])
+  status     String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  note       String?
+  decidedAt  DateTime?
+
+  @@unique([stageId, approverId])
+}
+
+// ---------- tasks ----------
+
+model Task {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stageId     String?
+  stage       Stage?    @relation(fields: [stageId], references: [id])
+  parentId    String?
+  parent      Task?     @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks    Task[]    @relation("Subtasks")
+  title       String
+  description String?
+  status      String    @default("TODO") // TODO | IN_PROGRESS | BLOCKED | DONE
+  priority    String    @default("MEDIUM") // LOW | MEDIUM | HIGH
+  isMilestone Boolean   @default(false)
+  assigneeId  String?
+  assignee    User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  dueDate     DateTime?
+  // Fractional index for ordering (redline Q7 — no CRDT library needed).
+  order       Float     @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  dependsOn  TaskDependency[] @relation("DependentTask")
+  dependedBy TaskDependency[] @relation("PrerequisiteTask")
+}
+
+// Finish-to-start only in v1 (redline §5.2).
+model TaskDependency {
+  id          String @id @default(cuid())
+  taskId      String
+  task        Task   @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnId String
+  dependsOn   Task   @relation("PrerequisiteTask", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+}
+
+// ---------- risk & governance ----------
+
+model RaidEntry {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String // RISK | ASSUMPTION | ISSUE | DECISION
+  title     String
+  detail    String?
+  ownerId   String?
+  owner     User?    @relation("RaidOwner", fields: [ownerId], references: [id])
+  severity  String? // LOW | MEDIUM | HIGH
+  status    String   @default("OPEN") // OPEN | CLOSED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stakeholder {
+  id              String  @id @default(cuid())
+  projectId       String
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name            String
+  userId          String?
+  user            User?   @relation(fields: [userId], references: [id])
+  orgRole         String? // e.g. "Legal counsel"
+  raci            String // R | A | C | I
+  interest        String? // LOW | MEDIUM | HIGH
+  influence       String? // LOW | MEDIUM | HIGH
+  commsPreference String?
+}
+
+// ---------- scorecards ----------
+
+model ScorecardTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  kind        String    @default("SELECTION") // SELECTION | PERFORMANCE
+
+  criteria Criterion[]
+  rounds   ScoringRound[]
+}
+
+// Pass/fail criteria are separate from weighted scoring (§5.5).
+model Criterion {
+  id         String            @id @default(cuid())
+  templateId String
+  template   ScorecardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  weight     Int               @default(0) // percentage; 0 for pass/fail
+  isPassFail Boolean           @default(false)
+  order      Int               @default(0)
+
+  scores Score[]
+}
+
+// Redline §5.5: blind scoring is a lifecycle on a round, not a boolean on
+// a field. OPEN = evaluators see only their own scores; REVEALED = all
+// visible. Reveal is a server-authoritative action (D2).
+model ScoringRound {
+  id         String            @id @default(cuid())
+  projectId  String
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateId String
+  template   ScorecardTemplate @relation(fields: [templateId], references: [id])
+  name       String
+  blind      Boolean           @default(false)
+  status     String            @default("OPEN") // OPEN | REVEALED
+  createdAt  DateTime          @default(now())
+  revealedAt DateTime?
+
+  evaluators RoundEvaluator[]
+  suppliers  RoundSupplier[]
+  scores     Score[]
+}
+
+model RoundEvaluator {
+  id          String       @id @default(cuid())
+  roundId     String
+  round       ScoringRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  submittedAt DateTime?
+
+  @@unique([roundId, userId])
+}
+
+model RoundSupplier {
+  id         String       @id @default(cuid())
+  roundId    String
+  round      ScoringRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, supplierId])
+}
+
+model Score {
+  id          String       @id @default(cuid())
+  roundId     String
+  round       ScoringRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  criterionId String
+  criterion   Criterion    @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  evaluatorId String
+  evaluator   User         @relation(fields: [evaluatorId], references: [id])
+  value       Int? // 1..5 for weighted criteria
+  passed      Boolean? // for pass/fail criteria
+  comment     String?
+
+  @@unique([roundId, supplierId, criterionId, evaluatorId])
+}
+
+// ---------- contracts (lightweight — not CLM; redline A4) ----------
+
+model Contract {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  supplierId        String
+  supplier          Supplier  @relation(fields: [supplierId], references: [id])
+  projectId         String?
+  project           Project?  @relation(fields: [projectId], references: [id])
+  title             String
+  reference         String?
+  startDate         DateTime
+  endDate           DateTime
+  // Renewal-notice deadline = endDate - renewalNoticeDays (§5.6: the
+  // highest-value feature in the module).
+  renewalNoticeDays Int       @default(90)
+  value             Int?
+  currency          String    @default("EUR")
+  status            String    @default("ACTIVE") // ACTIVE | EXPIRED | TERMINATED | RENEWED
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  keyDates ContractKeyDate[]
+}
+
+model ContractKeyDate {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  title      String
+  date       DateTime
+  done       Boolean  @default(false)
+}
+
+// ---------- collaboration & audit ----------
+
+model Comment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entityType  String // PROJECT | TASK | SUPPLIER | CONTRACT
+  entityId    String
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  body        String
+  createdAt   DateTime  @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// Append-only. seq is the server-assigned order; occurredAt is the
+// client-claimed time (redline §5.7 dual timestamps — HLC slot when the
+// offline client lands).
+model ActivityLog {
+  seq         Int       @id @default(autoincrement())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId   String?
+  entityType  String
+  entityId    String
+  actorId     String?
+  actor       User?     @relation(fields: [actorId], references: [id])
+  action      String
+  detail      String?
+  occurredAt  DateTime  @default(now())
+  recordedAt  DateTime  @default(now())
+
+  @@index([workspaceId, projectId])
+  @@index([entityType, entityId])
+}
