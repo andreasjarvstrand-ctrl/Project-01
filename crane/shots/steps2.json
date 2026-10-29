@@ -1,0 +1,1 @@
+[["wait",800],["move",".iso-stage svg",0.639,0.639],["wait",3500],["click",".iso-stage svg",0.639,0.639],["wait",300],["eval","JSON.stringify(window.__clicks)+' '+document.querySelector('[data-readout]').textContent+' '+document.querySelector('.iso-stage').dataset.state"]]
