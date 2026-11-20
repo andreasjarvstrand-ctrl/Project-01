@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Territory Manager 2.0.0">
+<title>Territory Manager</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #fff; --text: #1c2330; --muted: #5d6778; --line: #dde1e8;
+  --accent: #2459c7; --accent-soft: #e6edfb; --ok: #1f7a4d; --bad: #b3261e; --warn: #8a5a00;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12151b; --panel: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --line: #2d3440;
+          --accent: #7aa2ff; --accent-soft: #1f2b45; --ok: #5cc98f; --bad: #ff8a80; --warn: #e6b450; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; }
+#file { font-size: 12px; color: var(--muted); }
+#file .dirty { color: var(--warn); }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav button { background: none; border: 0; padding: 6px 10px; border-radius: 6px; color: var(--muted); cursor: pointer; font: inherit; }
+nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.spacer { flex: 1; }
+main { padding: 16px; max-width: 1200px; margin: 0 auto; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; overflow-x: auto; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; max-width: 100%; }
+button { font: inherit; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn.danger { border-color: var(--bad); background: transparent; color: var(--bad); }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+form.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.tag { display: inline-block; padding: 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 12px; margin: 1px 2px 1px 0; }
+.src-manual { background: transparent; border: 1px dashed var(--warn); color: var(--warn); }
+.muted { color: var(--muted); }
+.add { color: var(--ok); } .rem { color: var(--bad); }
+.bar { height: 6px; background: var(--accent); border-radius: 3px; min-width: 2px; }
+.readonly { color: var(--warn); font-size: 12px; }
+#toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; display: none; max-width: calc(100% - 32px); z-index: 20; }
+#toast.err { background: var(--bad); color: #fff; }
+.menu { position: relative; }
+.menu > div { display: none; position: absolute; left: 0; top: calc(100% + 4px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; min-width: 230px; box-shadow: 0 6px 24px rgba(0,0,0,.15); z-index: 10; }
+.menu.open > div { display: block; }
+.menu > div button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.menu > div button:hover { background: var(--accent-soft); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.welcome { max-width: 640px; margin: 48px auto; text-align: center; }
+.welcome .choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+.welcome .btn { padding: 10px 18px; }
+.hidden { display: none !important; }
+@media (max-width: 640px) { main { padding: 12px; } section { padding: 12px; } }
+
+</style>
+</head>
+<body>
+<header>
+  <h1>Territory Manager</h1>
+  <div class="menu hidden" id="menuBox"><button class="btn ghost" id="menuBtn" aria-haspopup="true">File ▾</button><div id="menuItems" role="menu"></div></div>
+  <span id="file"></span>
+  <nav id="tabs" class="hidden"></nav>
+  <span class="spacer"></span>
+  <label id="scenarioPick" class="muted hidden">Scenario <select id="scenario"></select></label>
+  <span id="ro" class="readonly"></span>
+</header>
+<main id="view"></main>
+<footer class="muted" style="padding:0 16px 24px;text-align:center;font-size:12px">Territory Manager 2.0.0 · runs entirely in your browser · no data leaves this computer</footer>
+<div id="toast" role="status"></div>
+<noscript><p style="padding:16px">Territory Manager needs JavaScript. Open this file in Microsoft Edge, Chrome, Firefox or Safari.</p></noscript>
+<script>
+// ---- engine.js ----
+/* Territory Manager alignment engine. Pure functions, no DOM, no storage.
+ *
+ * Precedence per field force, per account:
+ *  1. Eligibility: the field force's targeting conditions must match
+ *     (otherwise only manual includes apply).
+ *  2. Manual include: always applies.
+ *  3. Account rules: every matching rule at the best (lowest) priority assigns;
+ *     if any matches, geography is skipped.
+ *  4. Geo rules: longest matching postal-code prefix wins; ties share the account.
+ *  5. Manual exclude: removes a territory, whatever assigned it.
+ */
+var TMEngine = (function () {
+  "use strict";
+
+  const OPS = ["eq", "ne", "in", "not_in", "starts_with", "contains", "gte", "lte"];
+
+  const norm = v => (typeof v === "string" ? v.trim().toLowerCase() : v == null ? null : v);
+  const normPostal = v => String(v ?? "").replace(/\s+/g, "").toUpperCase();
+
+  function validateCondition(c) {
+    if (!c || typeof c.field !== "string" || !c.field.trim()) throw new Error("condition needs a field");
+    if (!OPS.includes(c.op)) throw new Error(`unknown operator "${c.op}"; use one of ${OPS.join(", ")}`);
+    if ((c.op === "in" || c.op === "not_in") && !Array.isArray(c.value)) throw new Error(`operator "${c.op}" needs a list of values`);
+    if ((c.op === "gte" || c.op === "lte") && !Number.isFinite(Number(c.value))) throw new Error(`operator "${c.op}" needs a number`);
+    return c;
+  }
+
+  function matches(c, account) {
+    const actual = account[c.field];
+    const expected = c.value;
+    switch (c.op) {
+      case "eq": return norm(actual) === norm(expected);
+      case "ne": return norm(actual) !== norm(expected);
+      case "in": return expected.map(norm).includes(norm(actual));
+      case "not_in": return !expected.map(norm).includes(norm(actual));
+    }
+    if (actual == null || actual === "") return false;
+    if (c.op === "starts_with") return String(actual).toLowerCase().startsWith(String(expected).toLowerCase());
+    if (c.op === "contains") return String(actual).toLowerCase().includes(String(expected).toLowerCase());
+    const a = Number(actual), e = Number(expected);
+    if (!Number.isFinite(a) || !Number.isFinite(e)) return false;
+    return c.op === "gte" ? a >= e : a <= e;
+  }
+
+  const allMatch = (conds, account) => (conds || []).every(c => matches(c, account));
+
+  /**
+   * @param {object} d
+   *   fieldForces [{code, target:[cond]}], territories [{code, fieldForce, parent}],
+   *   accounts [{id, postal_code, ...}], accountRules [{id, territory, priority, conditions, name}],
+   *   geoRules [{id, territory, prefix}], manual [{id, account, territory, action, note}]
+   * @returns [{account, fieldForce, territory, source, ruleId, detail}]
+   */
+  function runAlignment(d) {
+    const terrFF = new Map(d.territories.map(t => [t.code, t.fieldForce]));
+
+    const rulesByFF = new Map();
+    for (const r of d.accountRules || []) {
+      const ff = terrFF.get(r.territory);
+      if (!ff) continue;
+      if (!rulesByFF.has(ff)) rulesByFF.set(ff, []);
+      rulesByFF.get(ff).push(r);
+    }
+    for (const list of rulesByFF.values()) list.sort((a, b) => a.priority - b.priority || a.id - b.id);
+
+    const geoByFF = new Map();
+    for (const g of d.geoRules || []) {
+      const ff = terrFF.get(g.territory);
+      if (!ff) continue;
+      if (!geoByFF.has(ff)) geoByFF.set(ff, new Map());
+      const m = geoByFF.get(ff), p = normPostal(g.prefix);
+      if (!m.has(p)) m.set(p, []);
+      m.get(p).push(g);
+    }
+
+    const includes = new Map(), excludes = new Set();
+    for (const m of d.manual || []) {
+      const ff = terrFF.get(m.territory);
+      if (!ff) continue;
+      if (m.action === "include") {
+        const k = m.account + "\u0000" + ff;
+        if (!includes.has(k)) includes.set(k, []);
+        includes.get(k).push(m);
+      } else if (m.action === "exclude") excludes.add(m.account + "\u0000" + m.territory);
+    }
+
+    const out = [];
+    for (const acct of d.accounts) {
+      const postal = normPostal(acct.postal_code);
+      for (const ff of d.fieldForces) {
+        const found = new Map();
+        const add = (territory, source, ruleId, detail) => {
+          if (!found.has(territory)) found.set(territory, { account: acct.id, fieldForce: ff.code, territory, source, ruleId, detail });
+        };
+        for (const m of includes.get(acct.id + "\u0000" + ff.code) || []) add(m.territory, "manual", m.id, m.note || "manual include");
+
+        if (allMatch(ff.target, acct)) {
+          let best = null;
+          for (const r of rulesByFF.get(ff.code) || []) {
+            if (best !== null && r.priority > best) break;
+            if (allMatch(r.conditions, acct)) {
+              best = r.priority;
+              add(r.territory, "account_rule", r.id, r.name || `account rule #${r.id}`);
+            }
+          }
+          if (best === null && postal) {
+            const geo = geoByFF.get(ff.code);
+            if (geo) {
+              for (let n = postal.length; n > 0; n--) {
+                const hits = geo.get(postal.slice(0, n));
+                if (hits) { hits.forEach(g => add(g.territory, "geo_rule", g.id, `postal code starts ${postal.slice(0, n)}`)); break; }
+              }
+            }
+          }
+        }
+        for (const [t, a] of found) if (!excludes.has(acct.id + "\u0000" + t)) out.push(a);
+      }
+    }
+    return out;
+  }
+
+  /** Accounts whose territory set changed, per field force. */
+  function diffAlignments(base, target) {
+    const index = rows => {
+      const m = new Map();
+      for (const a of rows) {
+        const k = a.account + "\u0000" + a.fieldForce;
+        if (!m.has(k)) m.set(k, new Set());
+        m.get(k).add(a.territory);
+      }
+      return m;
+    };
+    const b = index(base), t = index(target);
+    const keys = [...new Set([...b.keys(), ...t.keys()])].sort();
+    const changes = [];
+    for (const k of keys) {
+      const before = [...(b.get(k) || [])].sort(), after = [...(t.get(k) || [])].sort();
+      if (before.join("|") !== after.join("|")) {
+        const [account, fieldForce] = k.split("\u0000");
+        changes.push({ account, fieldForce, before, after });
+      }
+    }
+    return changes;
+  }
+
+  /** Account count and summed workload per territory, rolled up the hierarchy. */
+  function territoryMetrics(territories, assignments, accounts, weightField = "potential") {
+    const weight = new Map(accounts.map(a => [a.id, Number(a[weightField]) || 0]));
+    const parent = new Map(territories.map(t => [t.code, t.parent || null]));
+    const m = new Map(territories.map(t => [t.code, { accounts: new Set(), direct: 0 }]));
+    for (const a of assignments) {
+      if (m.has(a.territory)) m.get(a.territory).direct++;
+      const seen = new Set();
+      for (let node = a.territory; node && m.has(node) && !seen.has(node); node = parent.get(node)) {
+        seen.add(node);
+        m.get(node).accounts.add(a.account);
+      }
+    }
+    const out = {};
+    for (const [code, v] of m) {
+      let w = 0;
+      for (const id of v.accounts) w += weight.get(id) || 0;
+      out[code] = { accounts: v.accounts.size, directAccounts: v.direct, workload: Math.round(w * 100) / 100 };
+    }
+    return out;
+  }
+
+  // ---- CSV (handles quotes, Excel BOM, comma or semicolon) ----
+  function parseCSV(text) {
+    text = String(text).replace(/^﻿/, "");
+    const firstLine = text.split(/\r?\n/, 1)[0];
+    const delim = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ";" : ",";
+    const rows = [];
+    let row = [], field = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (ch === '"') q = false;
+        else field += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === delim) { row.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); rows.push(row); row = []; field = "";
+      } else field += ch;
+    }
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    const nonEmpty = rows.filter(r => r.some(c => c.trim() !== ""));
+    if (!nonEmpty.length) return [];
+    const header = nonEmpty[0].map(h => h.trim());
+    return nonEmpty.slice(1).map(r => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()]).filter(([h]) => h)));
+  }
+
+  function toCSV(header, rows) {
+    const cell = v => {
+      const s = String(v ?? "");
+      return /[",;\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    return [header, ...rows].map(r => r.map(cell).join(",")).join("\r\n") + "\r\n";
+  }
+
+  return { OPS, validateCondition, matches, allMatch, runAlignment, diffAlignments, territoryMetrics, parseCSV, toCSV, normPostal };
+})();
+
+
+
+// ---- store.js ----
+/* Territory Manager data model and operations. Works on a plain JSON-able object,
+ * so the whole database can be saved to and opened from a single file. */
+var TMStore = (function (E) {
+  "use strict";
+
+  const FORMAT = "territory-manager";
+  const FORMAT_VERSION = 1;
+  const MASTER = 1;
+  const ACCOUNT_COLS = ["id", "name", "type", "specialty", "segment", "postal_code", "city", "potential"];
+
+  const now = () => new Date().toISOString().slice(0, 19) + "Z";
+  const fail = msg => { throw new Error(msg); };
+  const emptyScope = () => ({ territories: [], accountRules: [], geoRules: [], manual: [] });
+  const clone = o => JSON.parse(JSON.stringify(o));
+
+  function create() {
+    return {
+      format: FORMAT, version: FORMAT_VERSION, nextId: 2,
+      fieldForces: [], accounts: [], roster: [], feedback: [],
+      scenarios: [{ id: MASTER, name: "Master", status: "master", baseId: null, createdAt: now(), ...emptyScope() }],
+    };
+  }
+
+  /** Validate a loaded file and fill in anything missing. */
+  function load(obj) {
+    if (!obj || obj.format !== FORMAT) fail("This is not a Territory Manager data file.");
+    if (obj.version > FORMAT_VERSION) fail("This file was made by a newer version of Territory Manager.");
+    const s = { ...create(), ...obj };
+    if (!s.scenarios.some(x => x.id === MASTER)) fail("The data file has no master alignment.");
+    let max = 1;
+    const seeIds = list => list.forEach(x => { if (typeof x.id === "number") max = Math.max(max, x.id); });
+    seeIds(s.scenarios); seeIds(s.roster); seeIds(s.feedback);
+    for (const sc of s.scenarios) {
+      Object.assign(sc, { ...emptyScope(), ...sc });
+      seeIds(sc.accountRules); seeIds(sc.geoRules); seeIds(sc.manual);
+    }
+    s.nextId = Math.max(s.nextId || 0, max + 1);
+    return s;
+  }
+
+  const newId = s => s.nextId++;
+
+  // ---- reference data ----
+  function upsertFieldForce(s, { code, name, target = [] }) {
+    code = String(code || "").trim();
+    if (!code || !String(name || "").trim()) fail("A field force needs a code and a name.");
+    target.forEach(E.validateCondition);
+    const ff = s.fieldForces.find(f => f.code === code);
+    if (ff) Object.assign(ff, { name, target });
+    else s.fieldForces.push({ code, name, target });
+  }
+
+  function deleteFieldForce(s, code) {
+    if (s.scenarios.some(sc => sc.territories.some(t => t.fieldForce === code))) fail("Delete this field force's territories first.");
+    s.fieldForces = s.fieldForces.filter(f => f.code !== code);
+  }
+
+  function cleanAccount(raw) {
+    const id = String(raw.id ?? "").trim(), name = String(raw.name ?? "").trim();
+    if (!id || !name) fail("Every account needs an id and a name.");
+    const acct = {};
+    for (const [k, v] of Object.entries(raw)) if (k) acct[k.trim()] = typeof v === "string" ? v.trim() : v;
+    acct.id = id; acct.name = name;
+    const p = String(acct.potential ?? "").replace(/\s/g, "").replace(",", ".");
+    if (p === "") acct.potential = 0;
+    else if (Number.isFinite(Number(p))) acct.potential = Number(p);
+    else fail(`Account ${id}: potential "${acct.potential}" is not a number.`);
+    return acct;
+  }
+
+  function upsertAccounts(s, rows) {
+    const cleaned = rows.map(cleanAccount);  // validate all first: all or nothing
+    const byId = new Map(s.accounts.map((a, i) => [a.id, i]));
+    let added = 0, updated = 0;
+    for (const a of cleaned) {
+      if (byId.has(a.id)) { s.accounts[byId.get(a.id)] = { ...s.accounts[byId.get(a.id)], ...a }; updated++; }
+      else { byId.set(a.id, s.accounts.length); s.accounts.push(a); added++; }
+    }
+    return { added, updated };
+  }
+
+  const importAccountsCSV = (s, text) => upsertAccounts(s, E.parseCSV(text));
+
+  function deleteAccount(s, id) {
+    s.accounts = s.accounts.filter(a => a.id !== id);
+    s.scenarios.forEach(sc => { sc.manual = sc.manual.filter(m => m.account !== id); });
+  }
+
+  // ---- scenarios ----
+  function scenario(s, id) {
+    return s.scenarios.find(x => x.id === Number(id)) || fail(`Scenario ${id} not found.`);
+  }
+
+  function editable(s, id) {
+    const sc = scenario(s, id);
+    if (sc.status === "published") fail("Published scenarios are read-only.");
+    return sc;
+  }
+
+  function createScenario(s, name, baseId = MASTER) {
+    const base = scenario(s, baseId);
+    const sc = { id: newId(s), name: String(name || "").trim() || "Untitled scenario", status: "draft", baseId: base.id, createdAt: now(), ...clone({
+      territories: base.territories, accountRules: base.accountRules, geoRules: base.geoRules, manual: base.manual }) };
+    s.scenarios.push(sc);
+    return sc;
+  }
+
+  function deleteScenario(s, id) {
+    if (Number(id) === MASTER) fail("The master alignment cannot be deleted.");
+    scenario(s, id);
+    s.scenarios = s.scenarios.filter(x => x.id !== Number(id));
+  }
+
+  function publishScenario(s, id) {
+    if (Number(id) === MASTER) fail("Master is already live.");
+    const sc = editable(s, id);
+    const changes = diff(s, MASTER, sc.id);
+    Object.assign(scenario(s, MASTER), clone({ territories: sc.territories, accountRules: sc.accountRules, geoRules: sc.geoRules, manual: sc.manual }));
+    sc.status = "published";
+    return changes;
+  }
+
+  // ---- territories & rules ----
+  function territory(sc, code) {
+    return sc.territories.find(t => t.code === code) || fail(`Territory "${code}" does not exist in scenario "${sc.name}".`);
+  }
+
+  function addTerritory(s, sid, { code, name, fieldForce, parent }) {
+    const sc = editable(s, sid);
+    code = String(code || "").trim(); name = String(name || "").trim();
+    if (!code || !name) fail("A territory needs a code and a name.");
+    if (!s.fieldForces.some(f => f.code === fieldForce)) fail(`Unknown field force "${fieldForce}".`);
+    if (sc.territories.some(t => t.code === code)) fail(`Territory "${code}" already exists.`);
+    if (parent && territory(sc, parent).fieldForce !== fieldForce) fail("The parent territory belongs to another field force.");
+    sc.territories.push({ code, name, fieldForce, parent: parent || null });
+  }
+
+  function updateTerritory(s, sid, code, { name, parent }) {
+    const sc = editable(s, sid), t = territory(sc, code);
+    if (parent) {
+      const p = territory(sc, parent);
+      if (p.fieldForce !== t.fieldForce) fail("The parent territory belongs to another field force.");
+      for (let n = p; n; n = n.parent ? territory(sc, n.parent) : null) if (n.code === code) fail("A territory cannot sit under itself.");
+    }
+    if (name !== undefined) t.name = String(name).trim() || t.name;
+    if (parent !== undefined) t.parent = parent || null;
+  }
+
+  function deleteTerritory(s, sid, code) {
+    const sc = editable(s, sid);
+    territory(sc, code);
+    if (sc.territories.some(t => t.parent === code)) fail("This territory has child territories. Move or delete them first.");
+    sc.territories = sc.territories.filter(t => t.code !== code);
+    for (const k of ["accountRules", "geoRules", "manual"]) sc[k] = sc[k].filter(r => r.territory !== code);
+    if (sc.id === MASTER) s.roster = s.roster.filter(r => r.territory !== code);
+  }
+
+  function addAccountRule(s, sid, { territory: code, conditions, priority = 100, name = "" }) {
+    const sc = editable(s, sid);
+    territory(sc, code);
+    if (!conditions || !conditions.length) fail("An account rule needs at least one condition.");
+    conditions.forEach(E.validateCondition);
+    const r = { id: newId(s), territory: code, name, priority: Number(priority) || 0, conditions };
+    sc.accountRules.push(r);
+    return r.id;
+  }
+
+  function addGeoRule(s, sid, { territory: code, prefix }) {
+    const sc = editable(s, sid);
+    territory(sc, code);
+    prefix = E.normPostal(prefix);
+    if (!prefix) fail("A postal-code prefix is required.");
+    const r = { id: newId(s), territory: code, prefix };
+    sc.geoRules.push(r);
+    return r.id;
+  }
+
+  function addManual(s, sid, { account, territory: code, action, note = "" }) {
+    const sc = editable(s, sid);
+    territory(sc, code);
+    if (action !== "include" && action !== "exclude") fail("Action must be include or exclude.");
+    if (!s.accounts.some(a => a.id === account)) fail(`Unknown account "${account}".`);
+    sc.manual = sc.manual.filter(m => !(m.account === account && m.territory === code));
+    const r = { id: newId(s), account, territory: code, action, note };
+    sc.manual.push(r);
+    return r.id;
+  }
+
+  function deleteRule(s, sid, kind, id) {
+    const key = { account: "accountRules", geo: "geoRules", manual: "manual" }[kind] || fail("Unknown rule type.");
+    const sc = editable(s, sid), before = sc[key].length;
+    sc[key] = sc[key].filter(r => r.id !== Number(id));
+    if (sc[key].length === before) fail("Rule not found.");
+  }
+
+  // ---- alignment ----
+  function align(s, sid) {
+    const sc = scenario(s, sid);
+    return E.runAlignment({ fieldForces: s.fieldForces, territories: sc.territories, accounts: s.accounts,
+      accountRules: sc.accountRules, geoRules: sc.geoRules, manual: sc.manual });
+  }
+
+  const diff = (s, baseId, targetId) => E.diffAlignments(align(s, baseId), align(s, targetId));
+
+  function territorySummary(s, sid) {
+    const sc = scenario(s, sid);
+    const metrics = E.territoryMetrics(sc.territories, align(s, sid), s.accounts);
+    return sc.territories.map(t => ({ ...t, ...metrics[t.code], roster: sc.id === MASTER ? s.roster.filter(r => r.territory === t.code) : [] }));
+  }
+
+  // ---- roster ----
+  function addRoster(s, { territory: code, person, email = "", role = "rep" }) {
+    territory(scenario(s, MASTER), code);
+    if (!String(person || "").trim()) fail("A name is required.");
+    const r = { id: newId(s), territory: code, person: person.trim(), email, role };
+    s.roster.push(r);
+    return r.id;
+  }
+
+  const deleteRoster = (s, id) => { s.roster = s.roster.filter(r => r.id !== Number(id)); };
+
+  // ---- feedback ----
+  function submitFeedback(s, { account, territory: code, action, requestedBy, comment = "" }) {
+    territory(scenario(s, MASTER), code);
+    if (action !== "add" && action !== "drop") fail("Action must be add or drop.");
+    if (!String(requestedBy || "").trim()) fail("Please give your name.");
+    if (!s.accounts.some(a => a.id === account)) fail(`Unknown account "${account}".`);
+    const f = { id: newId(s), account, territory: code, action, requestedBy, comment, status: "pending", createdAt: now() };
+    s.feedback.push(f);
+    return f.id;
+  }
+
+  function resolveFeedback(s, id, approve, resolvedBy = "manager") {
+    const f = s.feedback.find(x => x.id === Number(id)) || fail("Request not found.");
+    if (f.status !== "pending") fail("This request was already resolved.");
+    if (approve) addManual(s, MASTER, { account: f.account, territory: f.territory,
+      action: f.action === "add" ? "include" : "exclude", note: `request #${f.id} from ${f.requestedBy}` });
+    Object.assign(f, { status: approve ? "approved" : "rejected", resolvedBy, resolvedAt: now() });
+  }
+
+  // ---- export ----
+  function exportCSV(s, sid) {
+    const names = new Map(s.accounts.map(a => [a.id, a.name]));
+    const rows = align(s, sid)
+      .sort((a, b) => (a.fieldForce + a.territory + a.account).localeCompare(b.fieldForce + b.territory + b.account))
+      .map(a => [a.account, names.get(a.account) || "", a.fieldForce, a.territory, a.source, a.ruleId ?? "", a.detail]);
+    return E.toCSV(["account_id", "account_name", "field_force", "territory", "source", "rule_id", "reason"], rows);
+  }
+
+  const accountColumns = s => [...new Set([...ACCOUNT_COLS, ...s.accounts.flatMap(Object.keys)])];
+  const exportAccountsCSV = s => {
+    const cols = accountColumns(s);
+    return E.toCSV(cols, s.accounts.map(a => cols.map(c => a[c] ?? "")));
+  };
+
+  return { MASTER, ACCOUNT_COLS, create, load, upsertFieldForce, deleteFieldForce, upsertAccounts, importAccountsCSV,
+    deleteAccount, scenario, createScenario, deleteScenario, publishScenario, addTerritory, updateTerritory, deleteTerritory,
+    addAccountRule, addGeoRule, addManual, deleteRule, align, diff, territorySummary, addRoster, deleteRoster,
+    submitFeedback, resolveFeedback, exportCSV, exportAccountsCSV, accountColumns };
+})(typeof TMEngine !== "undefined" ? TMEngine : require("./engine.js"));
+
+
+
+// ---- demo.js ----
+/* Fictional demo data. All names are made up. */
+var TMDemo = (function (S) {
+  "use strict";
+  const ACCOUNTS = [
+    ["A001", "Northgate University Hospital", "Hospital", "Hematology", "Centre of Excellence", "171 64", "Solna", 95],
+    ["A002", "Lakeside Hematology Clinic", "Clinic", "Hematology", "High", "113 45", "Stockholm", 60],
+    ["A003", "Birchwood Children's Hospital", "Hospital", "Pediatric hematology", "High", "141 86", "Huddinge", 70],
+    ["A004", "Uppland Regional Hospital", "Hospital", "Hematology", "Medium", "751 85", "Uppsala", 50],
+    ["A005", "Southcoast University Hospital", "Hospital", "Hematology", "Centre of Excellence", "221 85", "Lund", 90],
+    ["A006", "Harbour Blood Disorders Unit", "Clinic", "Hematology", "Medium", "211 20", "Malmö", 40],
+    ["A007", "Westbay Hospital", "Hospital", "Hematology", "High", "413 45", "Göteborg", 65],
+    ["A008", "Riverside Rheumatology", "Clinic", "Rheumatology", "High", "114 28", "Stockholm", 55],
+    ["A009", "Pinecrest Immunology Centre", "Clinic", "Immunology", "Medium", "416 50", "Göteborg", 45],
+    ["A010", "Northern Lights Hospital", "Hospital", "Hematology", "Medium", "901 85", "Umeå", 35],
+    ["A011", "Fjällgården Clinic", "Clinic", "Rheumatology", "Low", "831 30", "Östersund", 15],
+    ["A012", "Meadow Family Practice", "Clinic", "General practice", "Low", "118 20", "Stockholm", 5],
+    ["A013", "Coastline Rheumatology", "Clinic", "Rheumatology", "Medium", "252 21", "Helsingborg", 30],
+    ["A014", "Ironworks County Hospital", "Hospital", "Immunology", "Medium", "702 10", "Örebro", 40],
+    ["A015", "Linden Pediatric Centre", "Clinic", "Pediatric hematology", "Medium", "582 25", "Linköping", 30],
+  ];
+
+  function build() {
+    const s = S.create();
+    S.upsertAccounts(s, ACCOUNTS.map(a => Object.fromEntries(S.ACCOUNT_COLS.map((c, i) => [c, a[i]]))));
+    S.upsertFieldForce(s, { code: "HEM", name: "Hematology", target: [{ field: "specialty", op: "in", value: ["Hematology", "Pediatric hematology"] }] });
+    S.upsertFieldForce(s, { code: "IMM", name: "Immunology & Rheumatology", target: [{ field: "specialty", op: "in", value: ["Immunology", "Rheumatology"] }] });
+    const M = S.MASTER, t = (code, name, fieldForce, parent) => S.addTerritory(s, M, { code, name, fieldForce, parent });
+    t("HEM-SE", "Hematology Sweden", "HEM");
+    t("HEM-KAM", "Hematology Key Accounts", "HEM", "HEM-SE");
+    t("HEM-EAST", "Hematology East", "HEM", "HEM-SE");
+    t("HEM-WEST", "Hematology West & South", "HEM", "HEM-SE");
+    t("IMM-SE", "Immunology Sweden", "IMM");
+    t("IMM-NORTH", "Immunology North", "IMM", "IMM-SE");
+    t("IMM-SOUTH", "Immunology South", "IMM", "IMM-SE");
+    S.addAccountRule(s, M, { territory: "HEM-KAM", priority: 10, name: "Centres of excellence",
+      conditions: [{ field: "segment", op: "eq", value: "Centre of Excellence" }] });
+    ["1", "5", "6", "7", "8", "9"].forEach(prefix => S.addGeoRule(s, M, { territory: "HEM-EAST", prefix }));
+    ["2", "3", "4"].forEach(prefix => S.addGeoRule(s, M, { territory: "HEM-WEST", prefix }));
+    ["1", "7", "8", "9"].forEach(prefix => S.addGeoRule(s, M, { territory: "IMM-NORTH", prefix }));
+    ["2", "3", "4", "5", "6"].forEach(prefix => S.addGeoRule(s, M, { territory: "IMM-SOUTH", prefix }));
+    const r = (territory, person, email, role = "rep") => S.addRoster(s, { territory, person, email, role });
+    r("HEM-SE", "Charlie Nyberg", "charlie.nyberg@example.com", "manager");
+    r("HEM-KAM", "Alex Berg", "alex.berg@example.com", "key account manager");
+    r("HEM-EAST", "Sam Lind", "sam.lind@example.com");
+    r("HEM-WEST", "Robin Ek", "robin.ek@example.com");
+    r("IMM-NORTH", "Kim Holm", "kim.holm@example.com");
+    r("IMM-SOUTH", "Jo Strand", "jo.strand@example.com");
+    return s;
+  }
+
+  return { build };
+})(typeof TMStore !== "undefined" ? TMStore : require("./store.js"));
+
+
+
+// ---- app.js ----
+/* Territory Manager user interface. Everything runs in the browser; nothing is sent anywhere. */
+(function (E, S, Demo) {
+  "use strict";
+
+  const LS_KEY = "territory-manager.data.v1";
+  const TABS = { territories: "Territories", accounts: "Accounts", rules: "Rules", scenarios: "Scenarios", feedback: "Field requests" };
+  const ui = { tab: "territories", sid: S.MASTER, data: null, fileHandle: null, fileName: null, dirty: false, saving: null };
+
+  const $ = (sel, el = document) => el.querySelector(sel);
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const formData = f => Object.fromEntries(new FormData(f));
+  const today = () => new Date().toISOString().slice(0, 10);
+  const condText = c => `${esc(c.field)} <b>${esc(c.op)}</b> ${esc(Array.isArray(c.value) ? c.value.join(" | ") : c.value)}`;
+  const parseValue = (op, v) => (op === "in" || op === "not_in") ? String(v).split("|").map(x => x.trim()).filter(Boolean)
+    : (op === "gte" || op === "lte") ? Number(String(v).replace(",", ".")) : v;
+
+  function toast(msg, isError = false) {
+    const t = $("#toast");
+    t.textContent = msg; t.className = isError ? "err" : ""; t.style.display = "block";
+    clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = "none"), isError ? 6000 : 3500);
+  }
+
+  // ---------- persistence ----------
+  // 1) Always kept in this browser (localStorage) so nothing is lost on close.
+  // 2) Optionally linked to a data file: in Edge/Chrome changes save straight to it;
+  //    elsewhere "Save" downloads a copy.
+  const canLinkFiles = typeof window.showSaveFilePicker === "function";
+
+  function persistLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(ui.data)); return true; }
+    catch { return false; }
+  }
+
+  function changed() {
+    const ok = persistLocal();
+    ui.dirty = true;
+    if (ui.fileHandle) scheduleFileSave();
+    renderFileStatus(ok ? "" : "Could not keep a copy in this browser: use Save to keep your work.");
+  }
+
+  function scheduleFileSave() {
+    clearTimeout(ui.saving);
+    ui.saving = setTimeout(() => writeHandle(ui.fileHandle).catch(err => toast("Could not save to the file: " + err.message, true)), 400);
+  }
+
+  async function writeHandle(handle) {
+    const w = await handle.createWritable();
+    await w.write(JSON.stringify(ui.data, null, 1));
+    await w.close();
+    ui.dirty = false;
+    renderFileStatus();
+  }
+
+  function download(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function saveAs() {
+    const name = ui.fileName || `territory-data-${today()}.json`;
+    if (canLinkFiles) {
+      try {
+        const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "Territory Manager data", accept: { "application/json": [".json"] } }] });
+        ui.fileHandle = h; ui.fileName = h.name;
+        await writeHandle(h);
+        toast(`Saved. Changes now save automatically to ${h.name}.`);
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        // fall through to a plain download (e.g. blocked by policy)
+      }
+    }
+    download(name, JSON.stringify(ui.data, null, 1), "application/json");
+    ui.fileName = name; ui.dirty = false; renderFileStatus();
+    toast(`Downloaded ${name}. Open it later with File → Open.`);
+  }
+
+  const save = () => (ui.fileHandle ? writeHandle(ui.fileHandle).then(() => toast("Saved.")) : saveAs()).catch(err => toast(err.message, true));
+
+  function useData(data, { fileName = null, handle = null, dirty = false } = {}) {
+    ui.data = data; ui.fileHandle = handle; ui.fileName = fileName; ui.sid = S.MASTER; ui.dirty = dirty;
+    persistLocal();
+    renderShell();
+  }
+
+  async function openFile() {
+    if (canLinkFiles && typeof window.showOpenFilePicker === "function") {
+      try {
+        const [h] = await window.showOpenFilePicker({ types: [{ description: "Territory Manager data", accept: { "application/json": [".json"] } }] });
+        const file = await h.getFile();
+        let writable = h;
+        try { if ((await h.requestPermission({ mode: "readwrite" })) !== "granted") writable = null; } catch { writable = null; }
+        useData(S.load(JSON.parse(await file.text())), { fileName: file.name, handle: writable });
+        toast(`Opened ${file.name}${writable ? "; changes save to it automatically" : ""}.`);
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        if (err instanceof SyntaxError || /Territory Manager|version|master/.test(err.message)) return toast(err.message, true);
+      }
+    }
+    pickFile(".json,application/json", async file => {
+      useData(S.load(JSON.parse(await file.text())), { fileName: file.name });
+      toast(`Opened ${file.name}.`);
+    });
+  }
+
+  function pickFile(accept, onFile) {
+    const input = Object.assign(document.createElement("input"), { type: "file", accept });
+    input.onchange = async () => {
+      if (!input.files[0]) return;
+      try { await onFile(input.files[0]); } catch (err) { toast(err instanceof SyntaxError ? "That file is not valid: " + err.message : err.message, true); }
+    };
+    input.click();
+  }
+
+  function confirmReplace() {
+    return !ui.data || !ui.dirty || ui.fileHandle || confirm("Your current data has changes that are not saved to a file. Replace it anyway?");
+  }
+
+  /** Run a change, report errors, save, re-render. */
+  function act(fn, after) {
+    try {
+      const result = fn(ui.data);
+      changed();
+      if (after) after(result);
+      render();
+      return result;
+    } catch (err) { toast(err.message, true); }
+  }
+
+  // ---------- shell ----------
+  const MENU = [
+    ["new", "New, empty data"], ["demo", "New, with demo data"], ["open", "Open data file…"], "-",
+    ["save", "Save"], ["saveas", "Save as…"], "-",
+    ["import", "Import accounts (CSV)…"], ["exportAccounts", "Export accounts (CSV)"], ["exportAlign", "Export alignment (CSV)"], "-",
+    ["forget", "Remove data from this browser"],
+  ];
+  const MENU_ACTIONS = {
+    new: () => confirmReplace() && useData(S.create(), { dirty: true }),
+    demo: () => confirmReplace() && useData(Demo.build(), { dirty: true }),
+    open: () => confirmReplace() && openFile(),
+    save, saveas: saveAs,
+    import: () => pickFile(".csv,.txt,text/csv", async f => {
+      const text = await f.text();
+      act(d => S.importAccountsCSV(d, text), r => toast(`Accounts: ${r.added} added, ${r.updated} updated.`));
+    }),
+    exportAccounts: () => download(`accounts-${today()}.csv`, "﻿" + S.exportAccountsCSV(ui.data), "text/csv"),
+    exportAlign: () => download(`alignment-${S.scenario(ui.data, ui.sid).name.replace(/\W+/g, "-")}-${today()}.csv`, "﻿" + S.exportCSV(ui.data, ui.sid), "text/csv"),
+    forget: () => {
+      if (!confirm("Remove the data kept in this browser? Saved data files are not affected.")) return;
+      try { localStorage.removeItem(LS_KEY); } catch {}
+      ui.data = null; ui.fileHandle = null; ui.fileName = null; renderShell();
+    },
+  };
+
+  function renderShell() {
+    const has = !!ui.data;
+    $("#tabs").classList.toggle("hidden", !has);
+    $("#scenarioPick").classList.toggle("hidden", !has);
+    $("#menuBox").classList.toggle("hidden", !has);
+    if (!has) return renderWelcome();
+    renderScenarioPicker();
+    renderFileStatus();
+    render();
+  }
+
+  function renderFileStatus(warning = "") {
+    const el = $("#file");
+    if (!ui.data) { el.innerHTML = ""; return; }
+    const where = ui.fileHandle ? `Saving to ${esc(ui.fileName)}` : ui.fileName ? `From ${esc(ui.fileName)}` : "Not saved to a file yet";
+    const state = ui.fileHandle ? (ui.dirty ? " · saving…" : " · saved") : ui.dirty ? ` · <span class="dirty">unsaved changes (kept in this browser)</span>` : "";
+    el.innerHTML = where + state + (warning ? ` · <span class="dirty">${esc(warning)}</span>` : "");
+  }
+
+  function renderScenarioPicker() {
+    if (!ui.data.scenarios.some(s => s.id === ui.sid)) ui.sid = S.MASTER;
+    $("#scenario").innerHTML = ui.data.scenarios.map(s => `<option value="${s.id}" ${s.id === ui.sid ? "selected" : ""}>${esc(s.name)} (${s.status})</option>`).join("");
+  }
+
+  function renderWelcome() {
+    $("#view").onclick = null;
+    $("#view").innerHTML = `<div class="welcome"><h2 style="font-size:22px">Territory Manager</h2>
+      <p>Build and test sales territory alignments. Everything stays on this computer: nothing is uploaded and no internet is needed.</p>
+      <div class="choices">
+        <button class="btn" data-m="demo">Try it with demo data</button>
+        <button class="btn ghost" data-m="new">Start empty</button>
+        <button class="btn ghost" data-m="open">Open a data file…</button>
+      </div>
+      <p class="muted" style="margin-top:28px">Your work is kept in this browser automatically. Use <b>File → Save</b> to keep it in a file you can back up or share with colleagues.</p></div>`;
+    $("#view").onclick = e => { const m = e.target.dataset.m; if (m) MENU_ACTIONS[m](); };
+  }
+
+  const readonly = () => S.scenario(ui.data, ui.sid).status === "published";
+
+  function render() {
+    document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === ui.tab));
+    renderScenarioPicker();
+    $("#ro").textContent = readonly() ? "read-only (published)" : "";
+    $("#view").onclick = null; $("#view").onsubmit = null;
+    VIEWS[ui.tab]();
+  }
+
+  // Delegated handlers so re-rendered markup needs no rebinding.
+  function on(clicks, submits = {}) {
+    $("#view").onclick = e => {
+      const el = e.target.closest("[data-a]");
+      if (el && clicks[el.dataset.a]) clicks[el.dataset.a](el.dataset, el);
+    };
+    $("#view").onsubmit = e => {
+      const f = e.target;
+      if (submits[f.id]) { e.preventDefault(); submits[f.id](formData(f), f); }
+    };
+  }
+
+  const ffOptions = () => ui.data.fieldForces.map(f => `<option value="${esc(f.code)}">${esc(f.code)}: ${esc(f.name)}</option>`).join("");
+  const terrOptions = (sid = ui.sid) => S.scenario(ui.data, sid).territories.map(t => `<option value="${esc(t.code)}">${esc(t.code)}</option>`).join("");
+  const opOptions = () => E.OPS.map(o => `<option>${o}</option>`).join("");
+  const del = (a, attrs) => readonly() ? "" : `<button class="btn danger small" data-a="${a}" ${attrs}>Delete</button>`;
+
+  // ---------- views ----------
+  const VIEWS = {
+    territories() {
+      const d = ui.data, rows = S.territorySummary(d, ui.sid), byCode = new Map(rows.map(r => [r.code, r]));
+      const depth = c => { let n = 0; for (let p = byCode.get(c)?.parent; p && n < 50; p = byCode.get(p)?.parent) n++; return n; };
+      const ordered = [], visit = (p, ff) => rows.filter(r => (r.parent || null) === p && r.fieldForce === ff).forEach(r => { ordered.push(r); visit(r.code, ff); });
+      d.fieldForces.forEach(f => visit(null, f.code));
+      const isLeaf = r => !rows.some(c => c.parent === r.code);
+      const max = Math.max(1, ...rows.filter(isLeaf).map(r => r.workload));
+      const isMaster = ui.sid === S.MASTER;
+
+      $("#view").innerHTML = `
+      <section><h2>Territory hierarchy</h2>
+        ${ordered.length ? `<table><tr><th>Territory</th><th>Field force</th><th class="num">Accounts</th><th class="num">Workload</th><th style="width:16%"></th>${isMaster ? "<th>People</th>" : ""}<th></th></tr>
+        ${ordered.map(r => `<tr><td style="padding-left:${8 + depth(r.code) * 20}px"><b>${esc(r.code)}</b> <span class="muted">${esc(r.name)}</span></td>
+          <td>${esc(r.fieldForce)}</td><td class="num">${r.accounts}</td><td class="num">${r.workload}</td>
+          <td>${isLeaf(r) ? `<div class="bar" style="width:${(r.workload / max) * 100}%"></div>` : ""}</td>
+          ${isMaster ? `<td>${r.roster.map(p => `${esc(p.person)} <span class="muted">${esc(p.role)}</span> <button class="btn ghost small" data-a="unroster" data-id="${p.id}" title="Remove">×</button>`).join("<br>") || "<span class='muted'>vacant</span>"}</td>` : ""}
+          <td>${del("delTerr", `data-code="${esc(r.code)}"`)}</td></tr>`).join("")}</table>
+          <p class="muted">Workload = summed account potential. Bars compare the lowest-level territories so you can see balance at a glance.</p>`
+        : `<p class="muted">${d.fieldForces.length ? "No territories yet. Add one below." : "Start by adding a field force (a sales team) below, then add its territories."}</p>`}
+        ${readonly() || !d.fieldForces.length ? "" : `<form class="row" id="fTerr">
+          <input name="code" placeholder="Code, e.g. HEM-EAST" required size="14"><input name="name" placeholder="Name" required>
+          <select name="fieldForce">${ffOptions()}</select>
+          <select name="parent"><option value="">(top level)</option>${terrOptions()}</select>
+          <button class="btn">Add territory</button></form>`}
+      </section>
+      ${isMaster && rows.length ? `<section><h2>Assign a person</h2><form class="row" id="fRoster">
+        <select name="territory">${terrOptions()}</select><input name="person" placeholder="Name" required><input name="email" placeholder="Email" type="email">
+        <select name="role"><option>rep</option><option>key account manager</option><option>manager</option></select>
+        <button class="btn">Add</button></form></section>` : ""}
+      <section><h2>Field forces</h2>
+        <table><tr><th>Code</th><th>Name</th><th>Covers accounts where</th><th></th></tr>
+        ${d.fieldForces.map(f => `<tr><td><b>${esc(f.code)}</b></td><td>${esc(f.name)}</td><td>${f.target.map(condText).join(" and ") || "<span class='muted'>all accounts</span>"}</td>
+          <td><button class="btn danger small" data-a="delFF" data-code="${esc(f.code)}">Delete</button></td></tr>`).join("") || "<tr><td colspan=4 class='muted'>None yet.</td></tr>"}</table>
+        <form class="row" id="fFF"><input name="code" placeholder="Code, e.g. HEM" required size="8"><input name="name" placeholder="Name, e.g. Hematology" required>
+          <span class="muted">covers accounts where</span><input name="field" placeholder="field (optional)" size="12"><select name="op">${opOptions()}</select>
+          <input name="value" placeholder="value (| between options)"><button class="btn">Add field force</button></form>
+      </section>`;
+
+      on({
+        delTerr: ({ code }) => confirm(`Delete territory ${code} and its rules?`) && act(x => S.deleteTerritory(x, ui.sid, code)),
+        delFF: ({ code }) => confirm(`Delete field force ${code}?`) && act(x => S.deleteFieldForce(x, code)),
+        unroster: ({ id }) => act(x => S.deleteRoster(x, id)),
+      }, {
+        fTerr: v => act(x => S.addTerritory(x, ui.sid, v)),
+        fRoster: v => act(x => S.addRoster(x, v)),
+        fFF: v => act(x => S.upsertFieldForce(x, { code: v.code, name: v.name, target: v.field ? [{ field: v.field.trim(), op: v.op, value: parseValue(v.op, v.value) }] : [] })),
+      });
+    },
+
+    accounts() {
+      const q = ui.accountQuery || "";
+      $("#view").innerHTML = `<section><h2>Accounts and where they are aligned</h2>
+        <input id="q" placeholder="Search name, city, specialty, territory…" style="width:min(380px,100%)" value="${esc(q)}">
+        <div id="list"></div></section>
+        <section><h2>Add or import accounts</h2>
+          <p class="muted">Import a CSV from Excel with <b>File → Import accounts</b>. Columns: id, name, type, specialty, segment, postal_code, city, potential. Any extra column (e.g. tier) can be used in rules. Existing ids are updated.</p>
+          <form class="row" id="fAcct"><input name="id" placeholder="Id" required size="8"><input name="name" placeholder="Name" required><input name="specialty" placeholder="Specialty">
+          <input name="segment" placeholder="Segment" size="10"><input name="postal_code" placeholder="Postal code" size="9"><input name="city" placeholder="City" size="10">
+          <input name="potential" placeholder="Potential" size="7"><button class="btn">Add account</button></form></section>`;
+      const draw = () => {
+        const term = $("#q").value.trim().toLowerCase();
+        ui.accountQuery = $("#q").value;
+        const by = new Map();
+        for (const a of S.align(ui.data, ui.sid)) { if (!by.has(a.account)) by.set(a.account, []); by.get(a.account).push(a); }
+        const rows = ui.data.accounts.filter(a => !term || (Object.values(a).join(" ") + " " + (by.get(a.id) || []).map(x => x.territory).join(" ")).toLowerCase().includes(term))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const shown = rows.slice(0, 500);
+        $("#list").innerHTML = `<p class="muted">${rows.length} of ${ui.data.accounts.length} accounts${rows.length > shown.length ? " (first 500 shown; search to narrow)" : ""}</p>
+          <table><tr><th>Account</th><th>Specialty</th><th>Segment</th><th>Postal code</th><th class="num">Potential</th><th>Territories and why</th><th></th></tr>
+          ${shown.map(a => `<tr><td><b>${esc(a.name)}</b><br><span class="muted">${esc(a.id)} · ${esc(a.city)}</span></td><td>${esc(a.specialty)}</td><td>${esc(a.segment)}</td>
+            <td>${esc(a.postal_code)}</td><td class="num">${esc(a.potential)}</td>
+            <td>${(by.get(a.id) || []).map(x => `<span class="tag ${x.source === "manual" ? "src-manual" : ""}">${esc(x.territory)}</span> <span class="muted">${esc(x.detail)}</span>`).join("<br>") || "<span class='muted'>not aligned</span>"}</td>
+            <td><button class="btn danger small" data-a="delAcct" data-id="${esc(a.id)}">Delete</button></td></tr>`).join("")}</table>`;
+      };
+      let timer; $("#q").oninput = () => { clearTimeout(timer); timer = setTimeout(draw, 150); };
+      on({ delAcct: ({ id }) => confirm(`Delete account ${id}?`) && act(x => S.deleteAccount(x, id)) },
+         { fAcct: v => act(x => S.upsertAccounts(x, [v]), r => toast(r.added ? "Account added." : "Account updated.")) });
+      draw();
+    },
+
+    rules() {
+      const sc = S.scenario(ui.data, ui.sid), t = terrOptions();
+      const noTerr = !sc.territories.length;
+      $("#view").innerHTML = `
+      <section><h2>How an account gets its territory</h2><ol class="muted" style="margin:0;padding-left:20px">
+        <li>It must fit the field force (${ui.data.fieldForces.map(f => `${esc(f.code)}: ${f.target.map(condText).join(" and ") || "all accounts"}`).join("; ") || "no field forces yet"}).</li>
+        <li>Manual includes always apply.</li>
+        <li>Account rules: every match at the best (lowest) priority number assigns, and geography is then skipped.</li>
+        <li>Geography rules: the longest matching postal-code start wins.</li>
+        <li>Manual excludes remove a territory.</li></ol>
+        ${noTerr ? `<p class="rem">Add territories on the Territories tab before creating rules.</p>` : ""}</section>
+      <section><h2>Account rules</h2><table><tr><th class="num">Priority</th><th>Name</th><th>Conditions (all must match)</th><th>Territory</th><th></th></tr>
+        ${[...sc.accountRules].sort((a, b) => a.priority - b.priority || a.id - b.id).map(r => `<tr><td class="num">${r.priority}</td><td>${esc(r.name)}</td><td>${r.conditions.map(condText).join("<br>")}</td>
+          <td><span class="tag">${esc(r.territory)}</span></td><td>${del("delRule", `data-kind="account" data-id="${r.id}"`)}</td></tr>`).join("") || "<tr><td colspan=5 class='muted'>None.</td></tr>"}</table>
+        ${readonly() || noTerr ? "" : `<form class="row" id="fRule"><input name="name" placeholder="Rule name"><input name="field" placeholder="Field, e.g. segment" required size="12">
+          <select name="op">${opOptions()}</select><input name="value" placeholder="Value (| between options)" required>
+          <input name="field2" placeholder="and field (optional)" size="12"><select name="op2">${opOptions()}</select><input name="value2" placeholder="value">
+          <label class="muted">priority <input name="priority" type="number" value="100" style="width:70px"></label><select name="territory">${t}</select><button class="btn">Add rule</button></form>`}</section>
+      <section><h2>Geography rules</h2><table><tr><th>Postal code starts with</th><th>Territory</th><th></th></tr>
+        ${[...sc.geoRules].sort((a, b) => a.prefix.localeCompare(b.prefix)).map(r => `<tr><td>${esc(r.prefix)}</td><td><span class="tag">${esc(r.territory)}</span></td><td>${del("delRule", `data-kind="geo" data-id="${r.id}"`)}</td></tr>`).join("") || "<tr><td colspan=3 class='muted'>None.</td></tr>"}</table>
+        ${readonly() || noTerr ? "" : `<form class="row" id="fGeo"><input name="prefix" placeholder="e.g. 41 or 113,114,115" required size="16"><select name="territory">${t}</select><button class="btn">Add</button></form>
+          <p class="muted">Tip: enter several prefixes separated by commas.</p>`}</section>
+      <section><h2>Manual assignments</h2><table><tr><th>Account</th><th>Action</th><th>Territory</th><th>Note</th><th></th></tr>
+        ${sc.manual.map(r => `<tr><td>${esc(r.account)} <span class="muted">${esc(ui.data.accounts.find(a => a.id === r.account)?.name)}</span></td><td>${esc(r.action)}</td><td><span class="tag">${esc(r.territory)}</span></td>
+          <td class="muted">${esc(r.note)}</td><td>${del("delRule", `data-kind="manual" data-id="${r.id}"`)}</td></tr>`).join("") || "<tr><td colspan=5 class='muted'>None.</td></tr>"}</table>
+        ${readonly() || noTerr ? "" : `<form class="row" id="fMan"><input name="account" placeholder="Account id" required size="10" list="acctIds"><datalist id="acctIds">${ui.data.accounts.slice(0, 2000).map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</datalist>
+          <select name="action"><option>include</option><option>exclude</option></select><select name="territory">${t}</select><input name="note" placeholder="Note"><button class="btn">Add</button></form>`}</section>`;
+
+      on({ delRule: ({ kind, id }) => act(x => S.deleteRule(x, ui.sid, kind, id)) }, {
+        fRule: v => act(x => {
+          const conditions = [{ field: v.field.trim(), op: v.op, value: parseValue(v.op, v.value) }];
+          if (v.field2.trim()) conditions.push({ field: v.field2.trim(), op: v.op2, value: parseValue(v.op2, v.value2) });
+          return S.addAccountRule(x, ui.sid, { name: v.name, territory: v.territory, priority: Number(v.priority), conditions });
+        }),
+        fGeo: v => act(x => v.prefix.split(/[,;]/).map(p => p.trim()).filter(Boolean).forEach(prefix => S.addGeoRule(x, ui.sid, { territory: v.territory, prefix }))),
+        fMan: v => act(x => S.addManual(x, ui.sid, v)),
+      });
+    },
+
+    scenarios() {
+      const d = ui.data;
+      $("#view").innerHTML = `<section><h2>Scenarios</h2>
+        <p class="muted">A scenario is a copy of the alignment you can change freely. Compare it with master, then publish to make it the live alignment.</p>
+        <table><tr><th>Name</th><th>Status</th><th>Created</th><th></th></tr>
+        ${d.scenarios.map(s => `<tr><td><b>${esc(s.name)}</b></td><td>${s.status}</td><td class="muted">${esc(s.createdAt.slice(0, 16).replace("T", " "))}</td><td>
+          ${s.status === "draft" ? `<button class="btn ghost small" data-a="edit" data-id="${s.id}">Edit</button> <button class="btn ghost small" data-a="diff" data-id="${s.id}">Compare</button>
+          <button class="btn small" data-a="publish" data-id="${s.id}">Publish</button> <button class="btn danger small" data-a="del" data-id="${s.id}">Delete</button>` : ""}</td></tr>`).join("")}</table>
+        <form class="row" id="fScen"><input name="name" placeholder="Scenario name, e.g. 2027 realignment" required>
+          <select name="baseId">${d.scenarios.map(s => `<option value="${s.id}">copy of ${esc(s.name)}</option>`).join("")}</select><button class="btn">Create scenario</button></form></section>
+        <section id="diff"><h2>Compare with master</h2><p class="muted">Choose Compare on a draft scenario.</p></section>`;
+      const showDiff = id => {
+        const ch = S.diff(d, S.MASTER, id), names = new Map(d.accounts.map(a => [a.id, a.name]));
+        $("#diff").innerHTML = `<h2>${esc(S.scenario(d, id).name)} vs master: ${ch.length} account${ch.length === 1 ? "" : "s"} move</h2>
+          ${ch.length ? `<table><tr><th>Account</th><th>Field force</th><th>Now</th><th>In scenario</th></tr>
+          ${ch.map(c => `<tr><td>${esc(c.account)} <span class="muted">${esc(names.get(c.account))}</span></td><td>${esc(c.fieldForce)}</td>
+            <td class="rem">${esc(c.before.join(", ") || "—")}</td><td class="add">${esc(c.after.join(", ") || "—")}</td></tr>`).join("")}</table>` : "<p class='muted'>No account moves.</p>"}`;
+      };
+      on({
+        edit: ({ id }) => { ui.sid = Number(id); ui.tab = "rules"; render(); },
+        diff: ({ id }) => showDiff(Number(id)),
+        publish: ({ id }) => confirm("Make this scenario the live (master) alignment?") &&
+          act(x => S.publishScenario(x, id), ch => { ui.sid = S.MASTER; toast(`Published: ${ch.length} account moves.`); }),
+        del: ({ id }) => confirm("Delete this scenario?") && act(x => S.deleteScenario(x, id)),
+      }, {
+        fScen: v => act(x => S.createScenario(x, v.name, Number(v.baseId)), sc => { ui.sid = sc.id; ui.tab = "rules"; toast(`Now editing "${sc.name}". Switch scenarios at the top right.`); }),
+      });
+    },
+
+    feedback() {
+      const d = ui.data, items = [...d.feedback].reverse();
+      $("#view").innerHTML = `<section><h2>Request a change</h2>
+        <p class="muted">Reps ask to add or drop an account in a live territory. Approving turns the request into a manual assignment on master.
+        To collect requests from colleagues, they can make them in their copy and send you the data file, or simply email you the details.</p>
+        ${S.scenario(d, S.MASTER).territories.length ? `<form class="row" id="fFb"><input name="requestedBy" placeholder="Your name" required>
+          <select name="action"><option value="add">add</option><option value="drop">drop</option></select>
+          <input name="account" placeholder="Account id" required size="10" list="acctIds2"><datalist id="acctIds2">${d.accounts.slice(0, 2000).map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")}</datalist>
+          <select name="territory">${terrOptions(S.MASTER)}</select><input name="comment" placeholder="Reason"><button class="btn">Submit</button></form>` : "<p class='muted'>Add territories first.</p>"}</section>
+        <section><h2>Requests</h2><table><tr><th>#</th><th>Request</th><th>By</th><th>Reason</th><th>Status</th><th></th></tr>
+        ${items.map(f => `<tr><td>${f.id}</td><td>${f.action} <b>${esc(f.account)}</b> ${f.action === "add" ? "to" : "from"} <span class="tag">${esc(f.territory)}</span></td>
+          <td>${esc(f.requestedBy)}</td><td class="muted">${esc(f.comment)}</td><td>${f.status}${f.resolvedBy ? ` <span class="muted">by ${esc(f.resolvedBy)}</span>` : ""}</td>
+          <td>${f.status === "pending" ? `<button class="btn small" data-a="ok" data-id="${f.id}">Approve</button> <button class="btn danger small" data-a="no" data-id="${f.id}">Reject</button>` : ""}</td></tr>`).join("")
+          || "<tr><td colspan=6 class='muted'>No requests yet.</td></tr>"}</table></section>`;
+      on({
+        ok: ({ id }) => act(x => S.resolveFeedback(x, id, true)),
+        no: ({ id }) => act(x => S.resolveFeedback(x, id, false)),
+      }, { fFb: v => act(x => S.submitFeedback(x, v), () => toast("Request submitted.")) });
+    },
+  };
+
+  // ---------- start ----------
+  function start() {
+    $("#tabs").innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}">${v}</button>`).join("");
+    $("#tabs").onclick = e => { const k = e.target.dataset.tab; if (k) { ui.tab = k; try { localStorage.setItem(LS_KEY + ".tab", k); } catch {} render(); } };
+    $("#scenario").onchange = e => { ui.sid = Number(e.target.value); render(); };
+    $("#menuItems").innerHTML = MENU.map(m => m === "-" ? "<hr>" : `<button data-m="${m[0]}">${m[1]}</button>`).join("");
+    $("#menuBtn").onclick = e => { e.stopPropagation(); $("#menuBox").classList.toggle("open"); };
+    $("#menuItems").onclick = e => { const m = e.target.dataset.m; if (m) { $("#menuBox").classList.remove("open"); MENU_ACTIONS[m](); } };
+    document.addEventListener("click", () => $("#menuBox").classList.remove("open"));
+    document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "s" && ui.data) { e.preventDefault(); save(); } });
+    window.addEventListener("beforeunload", e => { if (ui.data && ui.dirty && !ui.fileHandle && !persistLocal()) { e.preventDefault(); e.returnValue = ""; } });
+
+    try { ui.tab = localStorage.getItem(LS_KEY + ".tab") || ui.tab; } catch {}
+    if (!TABS[ui.tab]) ui.tab = "territories";
+    try {
+      const saved = localStorage.getItem(LS_KEY);
+      if (saved) { ui.data = S.load(JSON.parse(saved)); ui.dirty = true; }
+    } catch (err) { toast("Could not read the data kept in this browser: " + err.message, true); }
+    renderShell();
+  }
+
+  start();
+})(TMEngine, TMStore, TMDemo);
+
+</script>
+</body>
+</html>

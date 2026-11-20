@@ -1,0 +1,52 @@
+:root {
+  --bg: #f6f7f9; --panel: #fff; --text: #1c2330; --muted: #5d6778; --line: #dde1e8;
+  --accent: #2459c7; --accent-soft: #e6edfb; --ok: #1f7a4d; --bad: #b3261e; --warn: #8a5a00;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12151b; --panel: #1b2029; --text: #e6e9ef; --muted: #9aa3b2; --line: #2d3440;
+          --accent: #7aa2ff; --accent-soft: #1f2b45; --ok: #5cc98f; --bad: #ff8a80; --warn: #e6b450; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; }
+#file { font-size: 12px; color: var(--muted); }
+#file .dirty { color: var(--warn); }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav button { background: none; border: 0; padding: 6px 10px; border-radius: 6px; color: var(--muted); cursor: pointer; font: inherit; }
+nav button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.spacer { flex: 1; }
+main { padding: 16px; max-width: 1200px; margin: 0 auto; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; overflow-x: auto; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; max-width: 100%; }
+button { font: inherit; }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn.danger { border-color: var(--bad); background: transparent; color: var(--bad); }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+form.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.tag { display: inline-block; padding: 1px 7px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 12px; margin: 1px 2px 1px 0; }
+.src-manual { background: transparent; border: 1px dashed var(--warn); color: var(--warn); }
+.muted { color: var(--muted); }
+.add { color: var(--ok); } .rem { color: var(--bad); }
+.bar { height: 6px; background: var(--accent); border-radius: 3px; min-width: 2px; }
+.readonly { color: var(--warn); font-size: 12px; }
+#toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; display: none; max-width: calc(100% - 32px); z-index: 20; }
+#toast.err { background: var(--bad); color: #fff; }
+.menu { position: relative; }
+.menu > div { display: none; position: absolute; left: 0; top: calc(100% + 4px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; min-width: 230px; box-shadow: 0 6px 24px rgba(0,0,0,.15); z-index: 10; }
+.menu.open > div { display: block; }
+.menu > div button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.menu > div button:hover { background: var(--accent-soft); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.welcome { max-width: 640px; margin: 48px auto; text-align: center; }
+.welcome .choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+.welcome .btn { padding: 10px 18px; }
+.hidden { display: none !important; }
+@media (max-width: 640px) { main { padding: 12px; } section { padding: 12px; } }

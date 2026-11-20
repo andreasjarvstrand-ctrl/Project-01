@@ -1,0 +1,36 @@
+name: Territory Manager
+
+# Tests the app, checks the committed territory-manager.html is up to date,
+# and on a tm-v* tag publishes it as a GitHub release download.
+on:
+  push:
+    paths: ["territory-management/**", ".github/workflows/territory-manager.yml"]
+    tags: ["tm-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: territory-management
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm test
+      - name: Built file matches the sources
+        run: node build.js && git diff --exit-code territory-manager.html
+      - name: Browser check (offline, opened from disk)
+        run: npm install --no-save playwright@1.49.1 && npx playwright install --with-deps chromium && node test/e2e.js
+      - if: startsWith(github.ref, 'refs/tags/tm-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: territory-management/territory-manager.html
+          body: |
+            Download territory-manager.html and double-click it. It opens in your browser and works offline.
+            Nothing to install. Share the file with colleagues the same way.

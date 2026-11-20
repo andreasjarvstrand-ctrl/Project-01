@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Territory Manager {{VERSION}}">
+<title>Territory Manager</title>
+<style>
+{{STYLE}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Territory Manager</h1>
+  <div class="menu hidden" id="menuBox"><button class="btn ghost" id="menuBtn" aria-haspopup="true">File ▾</button><div id="menuItems" role="menu"></div></div>
+  <span id="file"></span>
+  <nav id="tabs" class="hidden"></nav>
+  <span class="spacer"></span>
+  <label id="scenarioPick" class="muted hidden">Scenario <select id="scenario"></select></label>
+  <span id="ro" class="readonly"></span>
+</header>
+<main id="view"></main>
+<footer class="muted" style="padding:0 16px 24px;text-align:center;font-size:12px">Territory Manager {{VERSION}} · runs entirely in your browser · no data leaves this computer</footer>
+<div id="toast" role="status"></div>
+<noscript><p style="padding:16px">Territory Manager needs JavaScript. Open this file in Microsoft Edge, Chrome, Firefox or Safari.</p></noscript>
+<script>
+{{SCRIPTS}}
+</script>
+</body>
+</html>
