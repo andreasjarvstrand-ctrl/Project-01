@@ -95,3 +95,47 @@ test("export CSV", () => {
   assert.ok(lines[0].startsWith("account_id,account_name,field_force,territory"));
   assert.ok(lines.some(l => l.startsWith("A001,Northgate University Hospital,HEM,HEM-KAM,account_rule")));
 });
+
+test("map areas: assign by clicking areas overrides broader postal rules", () => {
+  const s = Demo.build();
+  assert.equal(s.geo.units.length, 57);
+  let st = S.areaStatus(s, M, "HEM");
+  assert.deepEqual(st.get("90").territories, ["HEM-EAST"]);
+  assert.equal(st.get("90").own, false);                      // covered by the broad rule "9"
+  assert.deepEqual([st.get("11").eligible, st.get("11").accounts], [1, 3]);
+  S.assignAreas(s, M, "HEM", ["90", "91"], "HEM-WEST");
+  st = S.areaStatus(s, M, "HEM");
+  assert.deepEqual(st.get("90").territories, ["HEM-WEST"]);
+  assert.equal(st.get("90").own, true);
+  assert.deepEqual(terr(s, M, "A010"), new Set(["HEM-WEST"]));
+  assert.deepEqual(terr(s, M, "A008"), new Set(["IMM-NORTH"]));  // other field force untouched
+  S.assignAreas(s, M, "HEM", ["90"], "HEM-KAM");             // reassign replaces, no duplicates
+  assert.equal(S.scenario(s, M).geoRules.filter(r => r.prefix === "90").length, 1);
+  S.assignAreas(s, M, "HEM", ["90"], null);                   // remove own rule: falls back to "9"
+  assert.deepEqual(terr(s, M, "A010"), new Set(["HEM-EAST"]));
+  assert.throws(() => S.assignAreas(s, M, "HEM", ["90"], "IMM-NORTH"), /not in field force/);
+  // a more specific rule inside an area is reported as a partial assignment
+  S.addGeoRule(s, M, { territory: "HEM-WEST", prefix: "113" });
+  assert.deepEqual(S.areaStatus(s, M, "HEM").get("11").partial, [{ prefix: "113", territories: ["HEM-WEST"] }]);
+});
+
+test("map areas: bricks match the account brick column", () => {
+  const s = Demo.build();
+  const sq = (x, y) => ({ type: "Polygon", coordinates: [[[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1], [x, y]]] });
+  const gj = { type: "FeatureCollection", features: [
+    { type: "Feature", properties: { BRICK: "b-100", NAME: "North" }, geometry: sq(18, 59) },
+    { type: "Feature", properties: { BRICK: "B-200", NAME: "South" }, geometry: sq(13, 55) },
+    { type: "Feature", properties: { BRICK: "B-200" }, geometry: sq(14, 55) },             // merged into B-200
+    { type: "Feature", properties: { BRICK: "B-300" }, geometry: { type: "Point", coordinates: [1, 2] } }] };
+  assert.equal(S.setGeography(s, { kind: "brick", source: "test", units: S.unitsFromGeoJSON(gj, "BRICK", "NAME") }), 2);
+  assert.equal(s.geo.units.find(u => u.code === "B-200").polygons.length, 2);
+  S.upsertAccounts(s, [{ id: "A001", name: "Northgate University Hospital", segment: "High", brick: "B-100" }]);
+  S.assignAreas(s, M, "HEM", ["B-100"], "HEM-WEST");
+  assert.deepEqual(terr(s, M, "A001"), new Set(["HEM-WEST"]));    // brick beats the postal rule "1"
+  assert.equal(S.areaStatus(s, M, "HEM").get("B-100").eligible, 1);
+  assert.deepEqual(terr(s, M, "A002"), new Set(["HEM-EAST"]));    // no brick: postal rules still apply
+  assert.throws(() => S.setGeography(s, { kind: "brick", units: [{ code: "X", geometry: sq(500, 3000) }] }), /WGS84/);
+  assert.throws(() => S.unitsFromGeoJSON({ foo: 1 }, "a"), /GeoJSON/);
+  const reopened = S.load(JSON.parse(JSON.stringify(s)));
+  assert.deepEqual(S.align(reopened, M), S.align(s, M));
+});

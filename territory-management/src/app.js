@@ -1,9 +1,9 @@
 /* Territory Manager user interface. Everything runs in the browser; nothing is sent anywhere. */
-(function (E, S, Demo) {
+(function (E, S, Demo, TMMap) {
   "use strict";
 
   const LS_KEY = "territory-manager.data.v1";
-  const TABS = { territories: "Territories", accounts: "Accounts", rules: "Rules", scenarios: "Scenarios", feedback: "Field requests" };
+  const TABS = { territories: "Territories", map: "Map", accounts: "Accounts", rules: "Rules", scenarios: "Scenarios", feedback: "Field requests" };
   const ui = { tab: "territories", sid: S.MASTER, data: null, fileHandle: null, fileName: null, dirty: false, saving: null };
 
   const $ = (sel, el = document) => el.querySelector(sel);
@@ -26,16 +26,63 @@
   //    elsewhere "Save" downloads a copy.
   const canLinkFiles = typeof window.showSaveFilePicker === "function";
 
-  function persistLocal() {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(ui.data)); return true; }
-    catch { return false; }
+  // Browser copy lives in IndexedDB (room for large map files), falling back to localStorage.
+  let idbPromise = null, lastGeo, storeWarning = "";
+  function idb() {
+    if (!idbPromise) idbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error("no IndexedDB"));
+      const req = indexedDB.open("territory-manager", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return idbPromise;
+  }
+  const idbGet = (db, key) => new Promise((res, rej) => { const r = db.transaction("kv").objectStore("kv").get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+
+  async function persistLocal() {
+    const data = ui.data;
+    if (!data) return;
+    const { geo, ...rest } = data;
+    try {
+      const db = await idb();
+      await new Promise((res, rej) => {
+        const tx = db.transaction("kv", "readwrite"), store = tx.objectStore("kv");
+        store.put(JSON.stringify(rest), "data");
+        if (geo !== lastGeo) store.put(geo ? JSON.stringify(geo) : null, "geo");
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+      });
+      lastGeo = geo;
+      try { localStorage.removeItem(LS_KEY); } catch {}
+      storeWarning = "";
+    } catch {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(data)); storeWarning = ""; }
+      catch { storeWarning = "Could not keep a copy in this browser: use File → Save to keep your work."; }
+    }
+    renderFileStatus();
+  }
+
+  async function loadLocal() {
+    try {
+      const db = await idb();
+      const [d, g] = await Promise.all([idbGet(db, "data"), idbGet(db, "geo")]);
+      if (d) { const obj = JSON.parse(d); if (g) obj.geo = JSON.parse(g); return obj; }
+    } catch {}
+    try { const t = localStorage.getItem(LS_KEY); if (t) return JSON.parse(t); } catch {}
+    return null;
+  }
+
+  async function forgetLocal() {
+    try { const db = await idb(); await new Promise(r => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").clear(); tx.oncomplete = tx.onerror = r; }); } catch {}
+    try { localStorage.removeItem(LS_KEY); } catch {}
+    lastGeo = undefined;
   }
 
   function changed() {
-    const ok = persistLocal();
     ui.dirty = true;
+    persistLocal();
     if (ui.fileHandle) scheduleFileSave();
-    renderFileStatus(ok ? "" : "Could not keep a copy in this browser: use Save to keep your work.");
+    renderFileStatus();
   }
 
   function scheduleFileSave() {
@@ -134,7 +181,7 @@
   const MENU = [
     ["new", "New, empty data"], ["demo", "New, with demo data"], ["open", "Open data file…"], "-",
     ["save", "Save"], ["saveas", "Save as…"], "-",
-    ["import", "Import accounts (CSV)…"], ["exportAccounts", "Export accounts (CSV)"], ["exportAlign", "Export alignment (CSV)"], "-",
+    ["import", "Import accounts (CSV)…"], ["importMap", "Import map areas (GeoJSON)…"], ["exportAccounts", "Export accounts (CSV)"], ["exportAlign", "Export alignment (CSV)"], "-",
     ["forget", "Remove data from this browser"],
   ];
   const MENU_ACTIONS = {
@@ -146,11 +193,12 @@
       const text = await f.text();
       act(d => S.importAccountsCSV(d, text), r => toast(`Accounts: ${r.added} added, ${r.updated} updated.`));
     }),
+    importMap: () => TMMap.startImport(),
     exportAccounts: () => download(`accounts-${today()}.csv`, "﻿" + S.exportAccountsCSV(ui.data), "text/csv"),
     exportAlign: () => download(`alignment-${S.scenario(ui.data, ui.sid).name.replace(/\W+/g, "-")}-${today()}.csv`, "﻿" + S.exportCSV(ui.data, ui.sid), "text/csv"),
     forget: () => {
       if (!confirm("Remove the data kept in this browser? Saved data files are not affected.")) return;
-      try { localStorage.removeItem(LS_KEY); } catch {}
+      forgetLocal();
       ui.data = null; ui.fileHandle = null; ui.fileName = null; renderShell();
     },
   };
@@ -166,7 +214,8 @@
     render();
   }
 
-  function renderFileStatus(warning = "") {
+  function renderFileStatus() {
+    const warning = storeWarning;
     const el = $("#file");
     if (!ui.data) { el.innerHTML = ""; return; }
     const where = ui.fileHandle ? `Saving to ${esc(ui.fileName)}` : ui.fileName ? `From ${esc(ui.fileName)}` : "Not saved to a file yet";
@@ -221,6 +270,10 @@
 
   // ---------- views ----------
   const VIEWS = {
+    map() {
+      TMMap.render({ ui, data: ui.data, view: $("#view"), esc, toast, act, pickFile, readonly, rerender: render });
+    },
+
     territories() {
       const d = ui.data, rows = S.territorySummary(d, ui.sid), byCode = new Map(rows.map(r => [r.code, r]));
       const depth = c => { let n = 0; for (let p = byCode.get(c)?.parent; p && n < 50; p = byCode.get(p)?.parent) n++; return n; };
@@ -400,16 +453,19 @@
     $("#menuItems").onclick = e => { const m = e.target.dataset.m; if (m) { $("#menuBox").classList.remove("open"); MENU_ACTIONS[m](); } };
     document.addEventListener("click", () => $("#menuBox").classList.remove("open"));
     document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "s" && ui.data) { e.preventDefault(); save(); } });
-    window.addEventListener("beforeunload", e => { if (ui.data && ui.dirty && !ui.fileHandle && !persistLocal()) { e.preventDefault(); e.returnValue = ""; } });
+    window.addEventListener("beforeunload", e => { if (ui.data && ui.dirty && !ui.fileHandle && storeWarning) { e.preventDefault(); e.returnValue = ""; } });
 
     try { ui.tab = localStorage.getItem(LS_KEY + ".tab") || ui.tab; } catch {}
     if (!TABS[ui.tab]) ui.tab = "territories";
-    try {
-      const saved = localStorage.getItem(LS_KEY);
-      if (saved) { ui.data = S.load(JSON.parse(saved)); ui.dirty = true; }
-    } catch (err) { toast("Could not read the data kept in this browser: " + err.message, true); }
-    renderShell();
+    $("#view").innerHTML = "<p class='muted'>Loading…</p>";
+    loadLocal().then(saved => {
+      if (saved) {
+        try { ui.data = S.load(saved); ui.dirty = true; lastGeo = ui.data.geo; }
+        catch (err) { toast("Could not read the data kept in this browser: " + err.message, true); }
+      }
+      renderShell();
+    });
   }
 
   start();
-})(TMEngine, TMStore, TMDemo);
+})(TMEngine, TMStore, TMDemo, TMMap);

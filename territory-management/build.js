@@ -3,12 +3,15 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 const src = f => fs.readFileSync(path.join(__dirname, "src", f), "utf8");
-const scripts = ["engine.js", "store.js", "demo.js", "app.js"]
+const scripts = ["engine.js", "store.js", "demo.js", "map.js", "app.js"]
   .map(f => `// ---- ${f} ----\n` + src(f).replace(/^if \(typeof module !== "undefined"\).*$/m, ""))
   .join("\n")
   .replace(/<\/script/gi, "<\\/script");
+
+// Fail the build on a syntax error rather than shipping a blank page.
+new (require("vm").Script)(scripts, { filename: "territory-manager.html <script>" });
 
 const html = src("index.html")
   .replace(/\{\{VERSION\}\}/g, VERSION)

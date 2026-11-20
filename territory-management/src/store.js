@@ -165,12 +165,13 @@ var TMStore = (function (E) {
     return r.id;
   }
 
-  function addGeoRule(s, sid, { territory: code, prefix }) {
+  function addGeoRule(s, sid, { territory: code, prefix, kind = "postal" }) {
     const sc = editable(s, sid);
     territory(sc, code);
     prefix = E.normPostal(prefix);
-    if (!prefix) fail("A postal-code prefix is required.");
+    if (!prefix) fail(kind === "brick" ? "A brick code is required." : "A postal-code prefix is required.");
     const r = { id: newId(s), territory: code, prefix };
+    if (kind === "brick") r.kind = "brick";
     sc.geoRules.push(r);
     return r.id;
   }
@@ -191,6 +192,104 @@ var TMStore = (function (E) {
     const sc = editable(s, sid), before = sc[key].length;
     sc[key] = sc[key].filter(r => r.id !== Number(id));
     if (sc[key].length === before) fail("Rule not found.");
+  }
+
+  // ---- map areas (bricks or postal-code areas with boundaries) ----
+  const AREA_KINDS = ["postal", "brick"];
+
+  /** Validate and store map areas. units: [{code, name, geometry: GeoJSON Polygon|MultiPolygon}] */
+  function setGeography(s, { kind, units, source = "" }) {
+    if (!AREA_KINDS.includes(kind)) fail("Areas must be postal-code areas or bricks.");
+    const seen = new Set(), clean = [];
+    const round = ring => ring.map(([x, y]) => [Math.round(x * 1e4) / 1e4, Math.round(y * 1e4) / 1e4]);
+    for (const u of units) {
+      const code = E.normPostal(u.code);
+      const g = u.geometry;
+      if (!code || !g || !Array.isArray(g.coordinates)) continue;
+      let polys;
+      if (g.type === "Polygon") polys = [g.coordinates];
+      else if (g.type === "MultiPolygon") polys = g.coordinates;
+      else continue;
+      polys = polys.map(p => p.map(round)).filter(p => p.length && p[0].length >= 3);
+      if (!polys.length) continue;
+      for (const p of polys) for (const ring of p) for (const [x, y] of ring)
+        if (!(Math.abs(x) <= 180 && Math.abs(y) <= 90)) fail("The map file must use longitude/latitude (WGS84, EPSG:4326). Re-export it in that coordinate system.");
+      if (seen.has(code)) {  // same code in several features: merge them
+        clean.find(c => c.code === code).polygons.push(...polys);
+        continue;
+      }
+      seen.add(code);
+      clean.push({ code, name: String(u.name ?? "").trim(), polygons: polys });
+    }
+    if (!clean.length) fail("No usable areas found. The file needs Polygon or MultiPolygon features with a code property.");
+    s.geo = { kind, source, units: clean };
+    return clean.length;
+  }
+
+  const clearGeography = s => { delete s.geo; };
+
+  /** Read a GeoJSON FeatureCollection into units using the chosen property names. */
+  function unitsFromGeoJSON(gj, codeProp, nameProp) {
+    const feats = gj && (gj.type === "FeatureCollection" ? gj.features : gj.type === "Feature" ? [gj] : null);
+    if (!feats) fail("This is not a GeoJSON file (expected a FeatureCollection).");
+    return feats.map(f => ({ code: f.properties?.[codeProp], name: nameProp ? f.properties?.[nameProp] : "", geometry: f.geometry }));
+  }
+
+  function ffTerritoryCodes(sc, fieldForce) {
+    return new Set(sc.territories.filter(t => t.fieldForce === fieldForce).map(t => t.code));
+  }
+
+  /** Assign map areas to a territory (or with territory = null remove their own rule) in one field force. */
+  function assignAreas(s, sid, fieldForce, codes, territoryCode) {
+    if (!s.geo) fail("Import map areas first.");
+    const sc = editable(s, sid), kind = s.geo.kind;
+    const inFF = ffTerritoryCodes(sc, fieldForce);
+    if (territoryCode && !inFF.has(territoryCode)) fail(`Territory "${territoryCode}" is not in field force ${fieldForce}.`);
+    const set = new Set(codes.map(E.normPostal));
+    const isKind = r => (r.kind === "brick") === (kind === "brick");
+    sc.geoRules = sc.geoRules.filter(r => !(isKind(r) && inFF.has(r.territory) && set.has(r.prefix)));
+    if (territoryCode) for (const c of set) addGeoRule(s, sid, { territory: territoryCode, prefix: c, kind });
+    return set.size;
+  }
+
+  /** Per area: territories, the rule that decides it, and account totals for one field force. */
+  function areaStatus(s, sid, fieldForce) {
+    const out = new Map();
+    if (!s.geo) return out;
+    const sc = scenario(s, sid), kind = s.geo.kind, inFF = ffTerritoryCodes(sc, fieldForce);
+    const byPrefix = new Map();
+    for (const r of sc.geoRules) {
+      if (!inFF.has(r.territory) || (r.kind === "brick") !== (kind === "brick")) continue;
+      if (!byPrefix.has(r.prefix)) byPrefix.set(r.prefix, []);
+      byPrefix.get(r.prefix).push(r.territory);
+    }
+    const codes = new Set(s.geo.units.map(u => u.code));
+    for (const code of codes) {
+      let territories = [], via = null;
+      if (kind === "brick") { territories = byPrefix.get(code) || []; via = territories.length ? code : null; }
+      else for (let n = code.length; n > 0; n--) {
+        const hit = byPrefix.get(code.slice(0, n));
+        if (hit) { territories = hit; via = code.slice(0, n); break; }
+      }
+      const partial = kind === "brick" ? [] : [...byPrefix].filter(([p]) => p.length > code.length && p.startsWith(code)).map(([p, t]) => ({ prefix: p, territories: t }));
+      out.set(code, { code, territories: [...new Set(territories)], via, own: via === code, partial, accounts: 0, eligible: 0, workload: 0 });
+    }
+    const ff = s.fieldForces.find(f => f.code === fieldForce);
+    for (const a of s.accounts) {
+      const code = areaOfAccount(a, codes, kind);
+      if (!code) continue;
+      const st = out.get(code);
+      st.accounts++;
+      if (!ff || E.allMatch(ff.target, a)) { st.eligible++; st.workload += Number(a.potential) || 0; }
+    }
+    return out;
+  }
+
+  function areaOfAccount(a, codes, kind) {
+    if (kind === "brick") { const b = E.normPostal(a.brick); return b && codes.has(b) ? b : null; }
+    const p = E.normPostal(a.postal_code);
+    for (let n = p.length; n > 0; n--) if (codes.has(p.slice(0, n))) return p.slice(0, n);
+    return null;
   }
 
   // ---- alignment ----
@@ -256,7 +355,8 @@ var TMStore = (function (E) {
   return { MASTER, ACCOUNT_COLS, create, load, upsertFieldForce, deleteFieldForce, upsertAccounts, importAccountsCSV,
     deleteAccount, scenario, createScenario, deleteScenario, publishScenario, addTerritory, updateTerritory, deleteTerritory,
     addAccountRule, addGeoRule, addManual, deleteRule, align, diff, territorySummary, addRoster, deleteRoster,
-    submitFeedback, resolveFeedback, exportCSV, exportAccountsCSV, accountColumns };
+    submitFeedback, resolveFeedback, exportCSV, exportAccountsCSV, accountColumns,
+    setGeography, clearGeography, unitsFromGeoJSON, assignAreas, areaStatus, areaOfAccount };
 })(typeof TMEngine !== "undefined" ? TMEngine : require("./engine.js"));
 
 if (typeof module !== "undefined") module.exports = TMStore;

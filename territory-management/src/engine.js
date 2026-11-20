@@ -6,7 +6,8 @@
  *  2. Manual include: always applies.
  *  3. Account rules: every matching rule at the best (lowest) priority assigns;
  *     if any matches, geography is skipped.
- *  4. Geo rules: longest matching postal-code prefix wins; ties share the account.
+ *  4. Geo rules: a brick rule matching account.brick, otherwise the longest matching
+ *     postal-code prefix; ties share the account.
  *  5. Manual exclude: removes a territory, whatever assigned it.
  */
 var TMEngine = (function () {
@@ -63,12 +64,14 @@ var TMEngine = (function () {
     }
     for (const list of rulesByFF.values()) list.sort((a, b) => a.priority - b.priority || a.id - b.id);
 
-    const geoByFF = new Map();
+    // Postal rules match on the start of the postal code; brick rules match account.brick exactly.
+    const geoByFF = new Map(), brickByFF = new Map();
     for (const g of d.geoRules || []) {
       const ff = terrFF.get(g.territory);
       if (!ff) continue;
-      if (!geoByFF.has(ff)) geoByFF.set(ff, new Map());
-      const m = geoByFF.get(ff), p = normPostal(g.prefix);
+      const target = g.kind === "brick" ? brickByFF : geoByFF;
+      if (!target.has(ff)) target.set(ff, new Map());
+      const m = target.get(ff), p = normPostal(g.prefix);
       if (!m.has(p)) m.set(p, []);
       m.get(p).push(g);
     }
@@ -103,7 +106,12 @@ var TMEngine = (function () {
               add(r.territory, "account_rule", r.id, r.name || `account rule #${r.id}`);
             }
           }
-          if (best === null && postal) {
+          let geoHit = false;
+          if (best === null && acct.brick != null && acct.brick !== "") {
+            const hits = brickByFF.get(ff.code)?.get(normPostal(acct.brick));
+            if (hits) { geoHit = true; hits.forEach(g => add(g.territory, "geo_rule", g.id, `brick ${normPostal(acct.brick)}`)); }
+          }
+          if (best === null && !geoHit && postal) {
             const geo = geoByFF.get(ff.code);
             if (geo) {
               for (let n = postal.length; n > 0; n--) {

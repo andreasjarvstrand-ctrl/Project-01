@@ -24,6 +24,7 @@ const { chromium } = require("playwright");
   const text = () => page.locator("#view").innerText();
 
   await page.goto(file);
+  await page.waitForSelector(".welcome");
   assert.match(await text(), /Try it with demo data/);
   await snap("1-welcome");
   await page.click("text=Try it with demo data");
@@ -82,7 +83,71 @@ const { chromium } = require("playwright");
   const exported = fs.readFileSync(await dl2.path(), "utf8");
   assert.ok(exported.startsWith("﻿account_id") && exported.includes("A010,Northern Lights Hospital,HEM,HEM-WEST"));
 
+  // map: select, assign, paint, box select, find
+  await page.click("nav >> text=Map");
+  assert.equal(await page.locator("#mapSvg path").count(), 57);
+  await page.waitForTimeout(200);
+  const fill = code => page.getAttribute(`#mapSvg path[data-code="${code}"]`, "fill");
+  const swatch = code => page.locator(`tr[data-t="${code}"] .sw`).evaluate(e => e.style.background);
+  const sameColour = async (code, terr) => {
+    const a = await fill(code), b = await swatch(terr);
+    const hex = a.replace("#", "").match(/../g).map(x => parseInt(x, 16)).join(", ");
+    assert.equal(b, `rgb(${hex})`, `${code} should be coloured as ${terr}`);
+  };
+  await page.click('#mapSvg path[data-code="91"]');
+  assert.match(await page.locator(".selpanel").innerText(), /1 postal area selected/);
+  await page.click('#mapSvg path[data-code="92"]', { modifiers: ["Control"] });
+  assert.match(await page.locator(".selpanel").innerText(), /2 postal areas selected/);
+  await page.selectOption("#mTarget", "HEM-WEST");
+  await page.click("#mAssign");
+  await sameColour("91", "HEM-WEST");
+  await sameColour("92", "HEM-WEST");
+  await page.check("#mPaint");
+  await page.click('tr[data-t="HEM-KAM"]');
+  await page.click('#mapSvg path[data-code="84"]');
+  await sameColour("84", "HEM-KAM");
+  await page.uncheck("#mPaint");
+  const box = await page.locator("#mapSvg").boundingBox();
+  await page.keyboard.down("Shift");
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.75);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.95, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  assert.match(await page.locator(".selpanel").innerText(), /\d+ postal areas selected/);
+  await page.fill("#mFind input", "41");
+  await page.click("#mFind button");
+  assert.match(await page.locator(".selpanel").innerText(), /1 postal area selected[\s\S]*41/);
+  await page.click("[data-z=fit]");
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.hover('#mapSvg path[data-code="84"]');
+  assert.match(await page.locator("#mapTip").innerText(), /HEM-KAM/);
+  await snap("6-map");
+  // map state survives reopening
+  await page.reload();
+  await page.click("nav >> text=Map");
+  await sameColour("84", "HEM-KAM");
+
+  // import a brick GeoJSON
+  const sq = (x, y) => ({ type: "Polygon", coordinates: [[[x, y], [x + 2, y], [x + 2, y + 2], [x, y + 2], [x, y]]] });
+  const gjFile = path.join(os.tmpdir(), "bricks.geojson");
+  fs.writeFileSync(gjFile, JSON.stringify({ type: "FeatureCollection", features: [
+    { type: "Feature", properties: { BRICK_ID: "B1", BRICK_NAME: "North brick" }, geometry: sq(17, 62) },
+    { type: "Feature", properties: { BRICK_ID: "B2", BRICK_NAME: "South brick" }, geometry: sq(13, 56) }] }));
+  const [ch3] = await Promise.all([page.waitForEvent("filechooser"), page.click("[data-g=import]")]);
+  await ch3.setFiles(gjFile);
+  await page.waitForSelector("#fGeoImp");
+  assert.match(await page.locator("#geoImport").innerText(), /2 features/);
+  assert.equal(await page.inputValue("#fGeoImp select[name=kind]"), "brick");
+  await page.click("#fGeoImp button.btn:not(.ghost)");
+  assert.equal(await page.locator("#mapSvg path").count(), 2);
+  await page.click("[data-g=demo]");
+  assert.equal(await page.locator("#mapSvg path").count(), 57);
+
   // phone width: no sideways page scroll
+  await page.setViewportSize({ width: 390, height: 800 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "horizontal scroll on map at phone width");
+  await snap("7-map-phone");
   await page.setViewportSize({ width: 390, height: 800 });
   await page.click("nav >> text=Territories");
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "horizontal scroll at phone width");
