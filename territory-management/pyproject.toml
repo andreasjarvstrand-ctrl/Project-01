@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "territory-manager"
+dynamic = ["version"]
+description = "Offline, rule-based sales territory alignment"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+territory-manager = "tm.__main__:main"
+
+[tool.setuptools]
+packages = ["tm"]
+
+[tool.setuptools.package-data]
+tm = ["static/*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "tm.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

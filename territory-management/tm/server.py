@@ -5,14 +5,17 @@ from __future__ import annotations
 import json
 import re
 import threading
+import webbrowser
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from importlib.resources import files
 from urllib.parse import parse_qs, urlparse
 
+from . import __version__
 from .store import Invalid, NotFound, Store
 
-STATIC = Path(__file__).parent / "static"
+# Loaded through importlib.resources so it also works from a .pyz or a frozen executable.
+STATIC_FILES = {"/": "index.html", "/index.html": "index.html"}
 ROUTES: list[tuple[str, re.Pattern, callable]] = []
 
 
@@ -28,6 +31,17 @@ S = r"(?P<sid>\d+)"
 
 @route("GET", "/api/field-forces")
 def _ff(st, q, b): return st.field_forces()
+
+@route("POST", "/api/field-forces")
+def _ff_new(st, q, b):
+    code = (b.get("code") or "").strip()
+    if not code or not b.get("name"):
+        raise Invalid("field force needs code and name")
+    st.upsert_field_force(code, b["name"], b.get("target_conditions") or [])
+    return {"ok": True}
+
+@route("GET", "/api/info")
+def _info(st, q, b): return {"version": __version__, "database": st.path}
 
 @route("GET", "/api/scenarios")
 def _scen(st, q, b): return st.scenarios()
@@ -137,7 +151,7 @@ def make_handler(store: Store):
             m = re.fullmatch(rf"/api/scenarios/{S}/export\.csv", url.path)
             if method == "GET" and m:
                 with lock:
-                    data = store.export_csv(int(m["sid"])).encode()
+                    data = "\ufeff".encode() + store.export_csv(int(m["sid"])).encode()
                 return self._send(200, data, "text/csv; charset=utf-8",
                                   {"Content-Disposition": f'attachment; filename="alignment-{m["sid"]}.csv"'})
             body = {}
@@ -162,12 +176,11 @@ def make_handler(store: Store):
             self._json(404, {"error": "no such endpoint"})
 
         def _static(self, path):
-            name = "index.html" if path in ("/", "") else path.lstrip("/")
-            f = (STATIC / name).resolve()
-            if STATIC.resolve() not in f.parents or not f.is_file():
+            name = STATIC_FILES.get(path)
+            if not name:
                 return self._send(404, b"not found", "text/plain")
-            ctype = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}.get(f.suffix, "application/octet-stream")
-            self._send(200, f.read_bytes(), ctype + "; charset=utf-8")
+            body = files("tm").joinpath("static", name).read_bytes()
+            self._send(200, body, "text/html; charset=utf-8", {"Cache-Control": "no-store"})
 
         def do_GET(self): self._dispatch("GET")
         def do_POST(self): self._dispatch("POST")
@@ -176,9 +189,18 @@ def make_handler(store: Store):
     return Handler
 
 
-def serve(store: Store, host="127.0.0.1", port=8765):
-    httpd = ThreadingHTTPServer((host, port), make_handler(store))
-    print(f"Territory Manager running at http://{host}:{port}")
+def serve(store: Store, host="127.0.0.1", port=8765, open_browser=False):
+    try:
+        httpd = ThreadingHTTPServer((host, port), make_handler(store))
+    except OSError:
+        httpd = ThreadingHTTPServer((host, 0), make_handler(store))  # port busy: take any free one
+    url = f"http://{host}:{httpd.server_address[1]}/"
+    print(f"Territory Manager {__version__}")
+    print(f"  Open:     {url}")
+    print(f"  Database: {store.path}")
+    print("  Close this window (or press Ctrl+C) to stop.")
+    if open_browser:
+        threading.Timer(0.5, webbrowser.open, (url,)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

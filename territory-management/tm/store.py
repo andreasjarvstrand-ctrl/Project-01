@@ -117,6 +117,7 @@ def _conditions(raw) -> tuple[E.Condition, ...]:
 
 class Store:
     def __init__(self, path: str = "territory.db"):
+        self.path = str(path)
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
@@ -146,7 +147,11 @@ class Store:
         if not acct.get("id") or not acct.get("name"):
             raise Invalid("account needs id and name")
         base = {k: acct.get(k) for k in ACCOUNT_COLS}
-        base["potential"] = float(base["potential"] or 0)
+        raw = str(base["potential"] or "0").replace(" ", "").replace(",", ".")  # accepts 12,5
+        try:
+            base["potential"] = float(raw)
+        except ValueError as e:
+            raise Invalid(f"account {acct['id']}: potential {base['potential']!r} is not a number") from e
         extra = {k: v for k, v in acct.items() if k not in ACCOUNT_COLS}
         self.db.execute(
             f"INSERT INTO accounts ({', '.join(ACCOUNT_COLS)}, attrs) VALUES ({', '.join('?' * (len(ACCOUNT_COLS) + 1))}) "
@@ -157,7 +162,10 @@ class Store:
 
     def import_accounts_csv(self, text: str) -> int:
         n = 0
-        for row in csv.DictReader(io.StringIO(text)):
+        text = text.lstrip("\ufeff")  # Excel's UTF-8 byte-order mark
+        sample = text[:2048]
+        delimiter = ";" if sample.count(";") > sample.count(",") else ","  # Swedish Excel uses ;
+        for row in csv.DictReader(io.StringIO(text), delimiter=delimiter):
             self.upsert_account({k: (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}, commit=False)
             n += 1
         self.db.commit()
@@ -171,6 +179,9 @@ class Store:
         return out
 
     # ---- scenarios ------------------------------------------------------
+    def is_empty(self) -> bool:
+        return not self.db.execute("SELECT 1 FROM field_forces LIMIT 1").fetchone()
+
     def scenarios(self):
         return self._rows("SELECT * FROM scenarios ORDER BY id")
 

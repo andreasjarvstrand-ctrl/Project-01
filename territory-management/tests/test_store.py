@@ -118,7 +118,30 @@ def test_http_api(store):
         code, body = call("GET", f"/api/scenarios/{sid}/accounts?q=" + urllib.parse.quote("umeå"))
         assert [a["id"] for a in json.loads(body)] == ["A010"]
         code, body = call("GET", f"/api/scenarios/{sid}/export.csv")
-        assert code == 200 and body.startswith(b"account_id")
+        assert code == 200 and body.startswith("\ufeffaccount_id".encode())
         assert call("GET", "/../store.py")[0] == 404
     finally:
         httpd.shutdown()
+
+
+def test_import_excel_semicolon_csv(store):
+    text = "﻿id;name;specialty;postal_code;potential\nA200;Åsa Klinik;Hematology;211 50;12,5\n"
+    assert store.import_accounts_csv(text) == 1
+    acct = next(a for a in store.accounts() if a["id"] == "A200")
+    assert acct["name"] == "Åsa Klinik" and acct["potential"] == 12.5
+    with pytest.raises(Invalid):
+        store.import_accounts_csv("id,name,potential\nA201,X,lots\n")
+
+
+def test_cli_first_run_backup_and_export(tmp_path, capsys):
+    from tm.__main__ import main
+    db = tmp_path / "data" / "t.db"
+    main(["--db", str(db), "seed"])
+    assert db.exists()
+    main(["--db", str(db), "backup", str(tmp_path / "bk")])
+    assert len(list((tmp_path / "bk").glob("territory-*.db"))) == 1
+    out = tmp_path / "a.csv"
+    main(["--db", str(db), "export", "-o", str(out)])
+    assert out.read_bytes().startswith("﻿account_id".encode())
+    with pytest.raises(SystemExit):
+        main(["--db", str(db), "seed"])  # refuses to seed twice

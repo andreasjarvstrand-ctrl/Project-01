@@ -3,23 +3,61 @@
 Rule-based sales territory alignment: territory hierarchies per field force, account and
 geography rules, manual overrides, what-if scenarios, field feedback, and a CSV feed for a CRM.
 
-Python 3.10+ standard library only: no packages to install.
+Works fully offline: no internet, no cloud, no accounts. Data stays in one file on your computer.
 
-## Run
+## Download and run (no installation)
+
+Get the file for your computer from the GitHub release (or the **Actions → Territory Manager
+release** run's artifacts):
+
+| Computer | File | How to start |
+|---|---|---|
+| Windows | `TerritoryManager-<version>-windows-amd64.exe` | Double-click. If SmartScreen warns, choose *More info → Run anyway*. |
+| Mac | `…-macos-arm64.zip` (Apple silicon) or `…-macos-x86_64.zip` (Intel) | Unzip, then right-click `TerritoryManager` → *Open* the first time. |
+| Linux | `…-linux-x86_64.zip` | Unzip, run `./TerritoryManager`. |
+| Any, with Python 3.10+ | `territory-manager-<version>.pyz` | `python territory-manager-<version>.pyz` |
+
+The app opens in your web browser at `http://127.0.0.1:8765` and keeps running in a small
+terminal window; close that window to stop it. It only listens on your own computer.
+The programs are not code-signed, which is why the system warns once. Company-managed
+laptops may need IT to allow it.
+
+**Your data** lives in one SQLite file:
+
+- Windows: `%LOCALAPPDATA%\TerritoryManager\territory.db`
+- Mac: `~/Library/Application Support/TerritoryManager/territory.db`
+- Linux: `~/.local/share/territory-manager/territory.db`
+
+The first start loads fictional demo data. To begin with your own data, use
+`--db mydata.db start --empty`, add field forces on the Territories tab, and import accounts.
+Set `TM_DB` to keep the database somewhere else (e.g. a shared drive).
+
+## Command line
+
+The same commands work with the executable, the `.pyz`, or `python -m tm`:
 
 ```bash
-python -m tm seed     # creates territory.db with fictional demo data
-python -m tm serve    # http://127.0.0.1:8765
+territory-manager                              # start and open the browser
+territory-manager start --port 9000 --no-browser
+territory-manager import-accounts accounts.csv # comma or semicolon CSV, Excel's UTF-8 is fine
+territory-manager export -o alignment.csv      # opens correctly in Excel
+territory-manager diff 2                       # scenario 2 vs master
+territory-manager backup D:\Backups            # dated copy of the database
+territory-manager where                        # show the database location
 ```
 
-Other commands:
+## Build it yourself
 
 ```bash
-python -m tm import-accounts accounts.csv   # insert or update accounts
-python -m tm export --scenario 1 > alignment.csv
-python -m tm diff 2                         # scenario 2 vs master
-python -m pytest                            # tests
+pip install pytest && python -m pytest          # 18 tests
+python scripts/build.py                         # dist/territory-manager-<version>.pyz
+pip install pyinstaller && python scripts/build.py --exe   # program for the current OS
+pip install .                                   # installs the territory-manager command
 ```
+
+PyInstaller builds only for the OS it runs on, so the GitHub workflow
+`.github/workflows/territory-manager-release.yml` builds Windows, Mac and Linux. Run it from
+the Actions tab, or push a tag such as `tm-v1.0.0` to publish a release with all files attached.
 
 ## Concepts
 

@@ -1,0 +1,62 @@
+name: Territory Manager release
+
+# Builds downloadable, offline Territory Manager programs for Windows, macOS and Linux.
+# Run it by hand from the Actions tab, or push a tag like tm-v1.0.0 to publish a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["tm-v*"]
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: territory-management
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pytest && python -m pytest -q
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, macos-13, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pyinstaller
+      - run: python scripts/build.py --exe
+      - if: matrix.os == 'ubuntu-22.04'
+        run: python scripts/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: territory-manager-${{ matrix.os }}
+          path: territory-management/dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/tm-v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body: |
+            Offline Territory Manager. Download the file for your computer and double-click it;
+            the app opens in your browser. No internet or installation needed.
+            - Windows: TerritoryManager-*-windows-*.exe
+            - Mac (Apple silicon): *-macos-arm64.zip · Mac (Intel): *-macos-x86_64.zip
+            - Linux: *-linux-x86_64.zip
+            - Any computer with Python 3.10+: territory-manager-*.pyz

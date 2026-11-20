@@ -52,6 +52,7 @@ form.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin
   <a id="export" class="btn ghost" style="text-decoration:none;color:var(--accent)" href="/api/scenarios/1/export.csv">Export CSV</a>
 </header>
 <main id="view"></main>
+<footer class="muted" id="info" style="padding:0 16px 24px;text-align:center;font-size:12px"></footer>
 <div id="toast"></div>
 <script>
 const TABS = { territories: "Territories", accounts: "Accounts", rules: "Rules", scenarios: "Scenarios", feedback: "Field feedback" };
@@ -77,6 +78,7 @@ async function init() {
   $("#tabs").onclick = e => { const k = e.target.dataset.tab; if (k) { state.tab = k; try { localStorage.setItem("tm.tab", k); } catch {} render(); } };
   $("#scenario").onchange = e => { state.sid = +e.target.value; render(); };
   state.forces = await api("/api/field-forces");
+  api("/api/info").then(i => $("#info").textContent = `Territory Manager ${i.version} · works offline · data saved in ${i.database}`);
   await loadScenarios();
   render();
 }
@@ -116,6 +118,11 @@ const VIEWS = {
         <select name="parent"><option value="">(no parent)</option>${rows.map(r => `<option>${esc(r.code)}</option>`).join("")}</select>
         <button class="btn">Add territory</button></form>`}
       <p class="muted">Workload = summed account potential. Bars compare leaf territories, so you can see balance at a glance.</p></section>
+      <section><h2>Field forces</h2><table><tr><th>Code</th><th>Name</th><th>Targets accounts where</th></tr>
+        ${state.forces.map(f => `<tr><td><b>${esc(f.code)}</b></td><td>${esc(f.name)}</td><td>${f.target_conditions.map(c => `${esc(c.field)} <b>${esc(c.op)}</b> ${esc(Array.isArray(c.value) ? c.value.join(" | ") : c.value)}`).join(" and ") || "<span class='muted'>all accounts</span>"}</td></tr>`).join("") || "<tr><td colspan=3 class='muted'>No field forces yet. Add one to start building territories.</td></tr>"}</table>
+        <form class="row" id="newFF"><input name="code" placeholder="Code, e.g. HEM" required size="8"><input name="name" placeholder="Name" required>
+          <span class="muted">targets</span><input name="field" placeholder="field (optional)" size="12"><select name="op">${OPS.map(o => `<option>${o}</option>`).join("")}</select>
+          <input name="value" placeholder="value (| separates lists)"><button class="btn">Add field force</button></form></section>
       ${state.sid === 1 ? `<section><h2>Assign person</h2><form class="row" id="newRoster">
         <select name="territory">${rows.map(r => `<option>${esc(r.code)}</option>`).join("")}</select>
         <input name="person" placeholder="Name" required><input name="email" placeholder="Email" type="email">
@@ -123,6 +130,12 @@ const VIEWS = {
         <button class="btn">Add to roster</button></form></section>` : ""}`;
     $("#view").onclick = async e => { const c = e.target.dataset.del; if (c && confirm(`Delete territory ${c} and its rules?`)) { await api(`/api/scenarios/${state.sid}/territories/${encodeURIComponent(c)}`, "DELETE"); render(); } };
     const nt = $("#newTerr"); if (nt) nt.onsubmit = async e => { e.preventDefault(); await api(`/api/scenarios/${state.sid}/territories`, "POST", formData(nt)); render(); };
+    $("#newFF").onsubmit = async e => {
+      e.preventDefault(); const d = formData(e.target);
+      const conds = d.field ? [{ field: d.field, op: d.op, value: ["in", "not_in"].includes(d.op) ? d.value.split("|").map(x => x.trim()) : (["gte", "lte"].includes(d.op) ? +d.value : d.value) }] : [];
+      await api("/api/field-forces", "POST", { code: d.code, name: d.name, target_conditions: conds });
+      state.forces = await api("/api/field-forces"); render();
+    };
     const nr = $("#newRoster"); if (nr) nr.onsubmit = async e => { e.preventDefault(); await api(`/api/roster`, "POST", formData(nr)); render(); };
   },
 
